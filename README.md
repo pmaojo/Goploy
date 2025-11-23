@@ -1,6 +1,36 @@
-# Dockploy TUI
+# Goploy TUI
 
-Dockploy TUI is a lightweight, self-hosted, TUI-based deployment manager.
+Goploy TUI is a lightweight, self-hosted, TUI-based deployment manager.
+
+## Roadmap
+
+### Functional Requirements (FR)
+
+- [ ] **FR1: Project Definition (YAML)**: Parse user-defined configuration (e.g., `goploy.yaml`) specifying projects (Name, Host, Path, Repo).
+- [ ] **FR2: Main TUI Navigation**: Interactive list of projects with keyboard navigation.
+- [ ] **FR3: Interactive Deployment Workflow**: Trigger deployment (git pull, docker compose pull/up) via key press.
+- [ ] **FR4: Real-time Logging (Deployment)**: Stream output of remote commands to a log panel.
+- [ ] **FR5: Real-time Logging (Monitoring)**: Stream application logs (`docker compose logs -f`) to a log panel.
+- [ ] **FR6: Basic Container Control**: Restart, Stop, and Shell Access via shortcuts.
+- [ ] **FR7: Status and Metadata Display**: Monitor container status and metadata.
+- [ ] **FR8: Remote Secure Execution**: Execute commands via SSH.
+- [ ] **FR9: Error Reporting**: Report failures in the TUI.
+
+### Non-Functional Requirements (NFR)
+
+- [ ] **NFR1: Performance (Startup)**: Fast initialization (< 500ms).
+- [ ] **NFR2: Resource Utilization**: Low memory footprint (< 30MB idle).
+- [ ] **NFR3: Concurrency and Responsiveness**: Responsive UI during background tasks.
+- [ ] **NFR4: Distribution**: Single statically compiled binary.
+- [ ] **NFR5: Keyboard Usability**: Full keyboard control.
+
+### Technical Requirements (TR)
+
+- [ ] **TR1: Core Language**: Go (Golang).
+- [ ] **TR2: TUI Framework**: `github.com/rivo/tview`.
+- [ ] **TR3: Orchestration**: Docker Compose.
+- [ ] **TR4: Remote Protocol**: `golang.org/x/crypto/ssh`.
+- [ ] **TR5: Project Structure**: Based on `allaboutapps/go-starter`, keeping `cmd/server` and adding `cmd/tui`.
 
 ## Project Requirements
 
@@ -9,7 +39,7 @@ These requirements ensure the tool meets the goals of being lightweight, self-ho
 ### I. Functional Requirements (FR)
 These define what the system must do to facilitate deployment and management.
 
-* **FR1: Project Definition (YAML)**: The application must read and parse a user-defined configuration file (e.g., `dockploy.yaml`) specifying projects. This configuration must include:
+* **FR1: Project Definition (YAML)**: The application must read and parse a user-defined configuration file (e.g., `goploy.yaml`) specifying projects. This configuration must include:
   * A unique project name.
   * Target host connection details (SSH URL/credentials).
   * The remote directory path containing the `docker-compose.yml` file.
