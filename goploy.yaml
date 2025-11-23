@@ -1,0 +1,13 @@
+projects:
+  - name: "Marketing Site"
+    host: "ssh://deploy@192.168.1.10:22"
+    path: "/var/www/marketing"
+    repo: "git@github.com:company/marketing.git"
+  - name: "Backend API"
+    host: "ssh://admin@api.production.com"
+    path: "/opt/services/backend"
+    repo: "https://github.com/company/backend.git"
+  - name: "Internal Tools"
+    host: "ssh://user@intranet.local"
+    path: "/home/user/tools"
+    repo: "git@gitlab.local:dev/tools.git"
