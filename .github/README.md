@@ -1,1 +1,1 @@
-../README-go-starter.md
+../README.md
