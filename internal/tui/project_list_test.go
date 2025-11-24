@@ -18,6 +18,9 @@ func TestNewProjectList(t *testing.T) {
 		OnDeploy: func(p config.Project) {
 			selectedProject = p
 		},
+		OnShell: func(p config.Project) {
+			selectedProject = p
+		},
 	}
 
 	list := NewProjectList(projects, handlers)

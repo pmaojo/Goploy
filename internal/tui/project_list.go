@@ -12,6 +12,7 @@ type ProjectListHandlers struct {
 	OnLogs    func(config.Project)
 	OnRestart func(config.Project)
 	OnStop    func(config.Project)
+	OnShell   func(config.Project)
 }
 
 // NewProjectList creates a tview.List populated with the given projects.
@@ -62,6 +63,11 @@ func NewProjectList(projects []config.Project, handlers *ProjectListHandlers) *t
 		case 's', 'S': // Stop
 			if handlers.OnStop != nil {
 				handlers.OnStop(p)
+			}
+			return nil
+		case 'e', 'E': // Shell (Exec)
+			if handlers.OnShell != nil {
+				handlers.OnShell(p)
 			}
 			return nil
 		}

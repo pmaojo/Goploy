@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -16,6 +17,8 @@ type Controller interface {
 	StreamLogs(ctx context.Context, project config.Project, output io.Writer) error
 	Restart(project config.Project, output io.Writer) error
 	Stop(project config.Project, output io.Writer) error
+	ListServices(project config.Project) ([]string, error)
+	RunShell(project config.Project, service string) error
 }
 
 // SSHClient implements Controller using the system's `ssh` binary.
@@ -92,6 +95,73 @@ func (c *SSHClient) Stop(project config.Project, output io.Writer) error {
 	fmt.Fprintf(output, "Running: %s\n", remoteCommand)
 
 	return c.runSSH(project.Host, remoteCommand, output, nil)
+}
+
+// ListServices fetches the list of services for the project.
+func (c *SSHClient) ListServices(project config.Project) ([]string, error) {
+	commands := []string{
+		fmt.Sprintf("cd %s", project.Path),
+		"docker compose config --services",
+	}
+	remoteCommand := strings.Join(commands, " && ")
+
+	args := []string{project.Host, remoteCommand}
+	var cmd *exec.Cmd
+
+	if c.CmdRunner != nil {
+		cmd = c.CmdRunner("ssh", args...)
+	} else {
+		cmd = exec.Command("ssh", args...)
+	}
+
+	// Capture output
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("ssh command failed: %w", err)
+	}
+
+	// Parse output
+	services := strings.Split(strings.TrimSpace(string(output)), "\n")
+	// Filter empty strings
+	var validServices []string
+	for _, s := range services {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			validServices = append(validServices, s)
+		}
+	}
+
+	return validServices, nil
+}
+
+// RunShell starts an interactive shell session for the service.
+func (c *SSHClient) RunShell(project config.Project, service string) error {
+	commands := []string{
+		fmt.Sprintf("cd %s", project.Path),
+		fmt.Sprintf("docker compose exec -it %s /bin/sh", service),
+	}
+	remoteCommand := strings.Join(commands, " && ")
+
+	// Important: ssh -t is needed for pseudo-terminal allocation
+	args := []string{"-t", project.Host, remoteCommand}
+
+	var cmd *exec.Cmd
+	if c.CmdRunner != nil {
+		cmd = c.CmdRunner("ssh", args...)
+	} else {
+		cmd = exec.Command("ssh", args...)
+	}
+
+	// Connect to standard streams
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ssh shell session ended: %w", err)
+	}
+
+	return nil
 }
 
 // runSSH executes a remote command via SSH.
