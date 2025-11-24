@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build builder image
+        run: DOCKER_BUILDKIT=1 docker build --target builder --file Dockerfile --tag ghcr.io/${{ github.repository_owner }}/goploy:builder-${GITHUB_SHA} .
+
+      - name: Extract binary artifact
+        run: |
+          container_id=$(docker create ghcr.io/${{ github.repository_owner }}/goploy:builder-${GITHUB_SHA})
+          docker cp ${container_id}:/app/bin/app ./app
+          docker rm ${container_id}
+          tar czf app-linux-amd64.tar.gz app
+          sha256sum app-linux-amd64.tar.gz > app-linux-amd64.tar.gz.sha256
+
+      - name: Build and push runtime image
+        run: |
+          DOCKER_BUILDKIT=1 docker build --target app --file Dockerfile --tag ghcr.io/${{ github.repository_owner }}/goploy:${GITHUB_REF_NAME} .
+          docker push ghcr.io/${{ github.repository_owner }}/goploy:${GITHUB_REF_NAME}
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app-linux-amd64.tar.gz
+            app-linux-amd64.tar.gz.sha256
+          tag_name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
