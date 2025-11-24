@@ -41,17 +41,37 @@ func TestHelperProcess(t *testing.T) {
 	if cmd == "ssh" {
 		// Simulate SSH output
 		fmt.Printf("Mock SSH Output: %s\n", cmdArgs)
-		if len(cmdArgs) >= 2 {
-			fmt.Printf("Executing on host: %s\n", cmdArgs[0])
-			fmt.Printf("Command: %s\n", cmdArgs[1])
+
+		// Handle args which might include "-t"
+		var host, command string
+		if cmdArgs[0] == "-t" {
+			if len(cmdArgs) >= 3 {
+				host = cmdArgs[1]
+				command = cmdArgs[2]
+			}
+		} else if len(cmdArgs) >= 2 {
+			host = cmdArgs[0]
+			command = cmdArgs[1]
+		}
+
+		if host != "" {
+			fmt.Printf("Executing on host: %s\n", host)
+			fmt.Printf("Command: %s\n", command)
 		}
 
 		// Simulate long running process if log streaming
-		if strings.Contains(cmdArgs[1], "logs -f") {
+		if strings.Contains(command, "logs -f") {
 			// keep running until signal or timeout
 			// We can simulate some output
 			fmt.Println("Log line 1")
 			time.Sleep(100 * time.Millisecond) // wait a bit
+		}
+
+		// Simulate docker compose config --services
+		if strings.Contains(command, "config --services") {
+			fmt.Println("service1")
+			fmt.Println("service2")
+			fmt.Println("db")
 		}
 
 		os.Exit(0)
@@ -152,4 +172,42 @@ func TestSSHClient_Stop(t *testing.T) {
 
 	assert.Contains(t, output, "Stopping project on localhost...")
 	assert.Contains(t, output, "Running: cd /var/www/test && docker compose stop")
+}
+
+func TestSSHClient_ListServices(t *testing.T) {
+	c := NewSSHClient()
+	c.CmdRunner = mockRunner
+
+	p := config.Project{
+		Name: "Test Project",
+		Host: "localhost",
+		Path: "/var/www/test",
+	}
+
+	services, err := c.ListServices(p)
+
+	assert.NoError(t, err)
+	assert.Contains(t, services, "service1")
+	assert.Contains(t, services, "service2")
+	assert.Contains(t, services, "db")
+}
+
+func TestSSHClient_RunShell(t *testing.T) {
+	c := NewSSHClient()
+	c.CmdRunner = mockRunner
+
+	p := config.Project{
+		Name: "Test Project",
+		Host: "localhost",
+		Path: "/var/www/test",
+	}
+
+	// This tests the command construction.
+	// Note: Mock runner doesn't actually interact with TTY, but verifies args.
+	err := c.RunShell(p, "web")
+
+	// Since mock process prints to stdout, and RunShell connects stdout to OS stdout,
+	// we can't easily capture it here without pipe magic or just trusting the exit code.
+	// However, we can check if it returns no error.
+	assert.NoError(t, err)
 }

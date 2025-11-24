@@ -55,6 +55,7 @@ func (a *App) setupUI() {
 		OnLogs:   func(p config.Project) { a.handleLogs(p) },
 		OnRestart: func(p config.Project) { a.handleRestart(p) },
 		OnStop:    func(p config.Project) { a.handleStop(p) },
+		OnShell:   func(p config.Project) { a.handleShell(p) },
 	})
 
     // Using a Flex layout for future expansion (e.g. Logs on the right)
@@ -164,6 +165,82 @@ func (a *App) handleStop(project config.Project) {
 			fmt.Fprintf(writer, "[green]Stop finished successfully.[white]\n")
 		}
 	}()
+}
+
+func (a *App) handleShell(project config.Project) {
+	a.cancelPreviousTask()
+	a.LogView.SetTitle("Control (FR6) - Shell Access")
+	a.LogView.Clear()
+	fmt.Fprintf(a.LogView, "[yellow]Fetching services for %s...[white]\n", project.Name)
+
+	// Run fetching in goroutine
+	go func() {
+		services, err := a.Controller.ListServices(project)
+		if err != nil {
+			a.TviewApp.QueueUpdateDraw(func() {
+				fmt.Fprintf(a.LogView, "[red]Failed to fetch services: %v[white]\n", err)
+			})
+			return
+		}
+
+		if len(services) == 0 {
+			a.TviewApp.QueueUpdateDraw(func() {
+				fmt.Fprintf(a.LogView, "[red]No services found.[white]\n")
+			})
+			return
+		}
+
+		// Create and show the selection modal
+		a.TviewApp.QueueUpdateDraw(func() {
+			a.showServiceSelectionModal(project, services)
+		})
+	}()
+}
+
+func (a *App) showServiceSelectionModal(project config.Project, services []string) {
+	list := tview.NewList()
+	list.SetBorder(true).SetTitle("Select Service for Shell")
+
+	for _, s := range services {
+		// capture s
+		s := s
+		list.AddItem(s, "", 0, func() {
+			// On Select:
+			a.Pages.RemovePage("services_modal")
+
+			// Suspend and Run Shell
+			a.TviewApp.Suspend(func() {
+				err := a.Controller.RunShell(project, s)
+				if err != nil {
+					// We are suspended, so we can print to stdout/stderr,
+					// but better to log it when we return.
+					// fmt.Printf("Error: %v\nPress Enter to continue...", err)
+					// fmt.Scanln()
+				}
+			})
+
+			// After resume
+			a.LogView.Clear()
+			fmt.Fprintf(a.LogView, "[yellow]Shell session ended.[white]\n")
+		})
+	}
+
+	// Add a cancel option
+	list.AddItem("Cancel", "Return to main menu", 'c', func() {
+		a.Pages.RemovePage("services_modal")
+	})
+
+	// Center the list
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(list, 10, 1, true). // Fixed height for the list
+			AddItem(nil, 0, 1, false), 0, 1, true).
+		AddItem(nil, 0, 1, false)
+
+	a.Pages.AddPage("services_modal", modal, true, true)
+	a.TviewApp.SetFocus(list)
 }
 
 // ThreadSafeWriter allows writing to a tview.TextView from a goroutine
