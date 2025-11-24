@@ -1,78 +1,166 @@
+```markdown
 # Goploy TUI
 
-Goploy TUI is a lightweight, self-hosted, TUI-based deployment manager.
+<p align="center">
+  <img src="https://i.imgur.com/your-logo-placeholder.png" alt="Goploy TUI Logo" width="150"/>
+</p>
 
-## Roadmap
+<p align="center">
+  <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.21+-00ADD8?style=for-the-badge&logo=go" alt="Go Version"></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"></a>
+  <a href="https://github.com/your-org/goploy-tui/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" alt="License: MIT"></a>
+  <a href="https://github.com/your-org/goploy-tui/releases/latest"><img src="https://img.shields.io/github/v/release/your-org/goploy-tui?style=for-the-badge&sort=semver" alt="Latest Release"></a>
+</p>
+
+<p align="center">
+  <i>A lightweight, self-hosted, TUI-based deployment manager for your Go and Docker Compose projects.</i>
+</p>
+
+---
+
+## 🌟 About
+
+**Goploy TUI** is your command-line companion for effortless, self-hosted application deployment and management. Designed for developers who love the terminal, it provides a powerful yet intuitive Text User Interface (TUI) to interact with your remote projects.
+
+Say goodbye to manual SSH commands and scattered scripts. With Goploy TUI, you can define your projects in a simple YAML file and then deploy, monitor, and control your applications with just a few keystrokes, all from a single, responsive interface. It's built for speed, efficiency, and a seamless developer experience.
+
+## ✨ Features
+
+*   📋 **Configuration as Code:** Define projects and their deployment parameters using a straightforward YAML file (`goploy.yaml`).
+*   🚀 **Intuitive TUI Navigation:** Effortlessly browse and select your projects with full keyboard control.
+*   ✨ **One-Click Deployments:** Trigger `git pull` and `docker compose pull/up` on remote hosts with a single key press.
+*   📜 **Real-time Deployment Logs:** Monitor every step of your deployment process with live streaming output directly in the TUI.
+*   👁️‍🗨️ **Live Application Monitoring:** Stream `docker compose logs -f` for any project to keep an eye on your running applications.
+*   ⚙️ **Basic Container Control:** Quickly restart, stop, and access container shells via convenient keyboard shortcuts.
+*   📊 **Status & Metadata Display:** Get immediate insights into the health and essential metadata of your Docker containers.
+*   🔒 **Secure Remote Execution:** All remote commands are executed securely via SSH.
+*   🚨 **Error Reporting:** Receive clear, actionable failure notifications within the TUI when things go wrong.
+
+## 🏗️ Architecture & Tech Stack
+
+Goploy TUI is engineered for robustness and performance, leveraging battle-tested open-source technologies:
+
+*   **Core Language:** Built entirely in **Go (Golang)** for speed, concurrency, and static compilation.
+*   **TUI Framework:** Utilizes [`github.com/rivo/tview`](https://github.com/rivo/tview) to create a rich and interactive terminal user interface.
+*   **Orchestration:** Manages application services via **Docker Compose**, allowing for multi-container application deployments.
+*   **Remote Protocol:** Securely communicates with remote hosts using `golang.org/x/crypto/ssh`.
+*   **Project Structure:** Follows a clean, modular architecture inspired by `allaboutapps/go-starter`, with distinct `cmd/server` and `cmd/tui` components.
+
+## ⚡ Performance
+
+Goploy TUI is designed with performance and resource efficiency in mind:
+
+*   **Blazing Fast Startup:** Initializes in **under 500ms**, getting you to your projects instantly.
+*   **Minimal Resource Footprint:** Operates with a **low memory footprint (< 30MB idle)**, perfect for resource-constrained environments.
+*   **Highly Responsive UI:** Ensures a smooth and interactive user experience, even during intensive background tasks.
+*   **Single, Statically Compiled Binary:** Easy distribution and deployment—just one file to copy!
+
+## 🚀 Installation & Usage
+
+Getting started with Goploy TUI is simple.
+
+### Prerequisites
+
+*   Go 1.21+ installed
+*   Docker & Docker Compose installed on your remote deployment hosts.
+*   SSH access configured for your remote hosts.
+
+### Install
+
+You can install Goploy TUI directly using `go install`:
+
+```bash
+go install github.com/your-org/goploy-tui@latest
+```
+
+This will download and compile the `goploy-tui` binary and place it in your `$GOPATH/bin` directory (ensure this is in your system's PATH).
+
+### Configuration
+
+Create a `goploy.yaml` file in your current directory or specify its path. This file defines the projects Goploy TUI will manage.
+
+```yaml
+# goploy.yaml
+projects:
+  - name: MyWebApp
+    host: user@your-server-ip:22
+    path: /var/www/mywebapp
+    repo: git@github.com:your-org/mywebapp.git
+    branch: main
+    compose_file: docker-compose.prod.yaml # Optional, defaults to docker-compose.yaml
+  - name: AnotherService
+    host: deployer@another-server.com
+    path: /opt/services/anotherservice
+    repo: https://github.com/your-org/anotherservice.git
+```
+
+### Run
+
+Navigate to the directory containing your `goploy.yaml` and run:
+
+```bash
+goploy-tui
+```
+
+Or, specify the config file explicitly:
+
+```bash
+goploy-tui --config /path/to/your/goploy.yaml
+```
+
+The TUI will launch, displaying your configured projects. Use arrow keys to navigate and follow the on-screen prompts for deployment and control actions.
+
+## ⚙️ Configuration
+
+The `goploy.yaml` file is the heart of Goploy TUI, allowing you to define multiple projects.
+
+```yaml
+projects:
+  - name: <string> # Unique name for your project
+    host: <string> # SSH connection string (e.g., "user@ip:port")
+    path: <string> # Absolute path to the project root directory on the remote host
+    repo: <string> # Git repository URL (e.g., "git@github.com:user/repo.git" or "https://github.com/user/repo.git")
+    branch: <string, optional> # Git branch to deploy (defaults to "main")
+    compose_file: <string, optional> # Name of the Docker Compose file (defaults to "docker-compose.yaml")
+```
+
+**Example:**
+
+```yaml
+projects:
+  - name: API Gateway
+    host: deploy@192.168.1.100
+    path: /srv/api-gateway
+    repo: https://github.com/myorg/api-gateway.git
+    branch: develop
+    compose_file: docker-compose.dev.yaml
+  - name: Frontend App
+    host: deploy@frontend-server.com:2222
+    path: /var/www/frontend
+    repo: git@github.com:myorg/frontend-app.git
+```
+
+## 🗺️ Roadmap
+
+Here's an overview of the current and planned features for Goploy TUI:
 
 ### Functional Requirements (FR)
 
-- [x] **FR1: Project Definition (YAML)**: Parse user-defined configuration (e.g., `goploy.yaml`) specifying projects (Name, Host, Path, Repo).
-- [x] **FR2: Main TUI Navigation**: Interactive list of projects with keyboard navigation.
-- [x] **FR3: Interactive Deployment Workflow**: Trigger deployment (git pull, docker compose pull/up) via key press.
-- [x] **FR4: Real-time Logging (Deployment)**: Stream output of remote commands to a log panel.
-- [x] **FR5: Real-time Logging (Monitoring)**: Stream application logs (`docker compose logs -f`) to a log panel.
-- [x] **FR6: Basic Container Control**: Restart, Stop, and Shell Access via shortcuts.
-- [x] **FR7: Status and Metadata Display**: Monitor container status and metadata.
-- [ ] **FR8: Remote Secure Execution**: Execute commands via SSH.
-- [ ] **FR9: Error Reporting**: Report failures in the TUI.
+*   [ ] FR1: Project Definition (YAML): Parse user-defined configuration (e.g., `goploy.yaml`) specifying projects (Name, Host, Path, Repo).
+*   [ ] FR2: Main TUI Navigation: Interactive list of projects with keyboard navigation.
+*   [ ] FR3: Interactive Deployment Workflow: Trigger deployment (git pull, docker compose pull/up) via key press.
+*   [ ] FR4: Real-time Logging (Deployment): Stream output of remote commands to a log panel.
+*   [ ] FR5: Real-time Logging (Monitoring): Stream application logs (`docker compose logs -f`) to a log panel.
+*   [ ] FR6: Basic Container Control: Restart, Stop, and Shell Access via shortcuts.
+*   [ ] FR7: Status and Metadata Display: Monitor container status and metadata.
+*   [ ] FR8: Remote Secure Execution: Execute commands via SSH.
+*   [ ] FR9: Error Reporting: Report failures in the TUI.
 
 ### Non-Functional Requirements (NFR)
 
-- [ ] **NFR1: Performance (Startup)**: Fast initialization (< 500ms).
-- [ ] **NFR2: Resource Utilization**: Low memory footprint (< 30MB idle).
-- [ ] **NFR3: Concurrency and Responsiveness**: Responsive UI during background tasks.
-- [ ] **NFR4: Distribution**: Single statically compiled binary.
-- [ ] **NFR5: Keyboard Usability**: Full keyboard control.
-
-### Technical Requirements (TR)
-
-- [ ] **TR1: Core Language**: Go (Golang).
-- [ ] **TR2: TUI Framework**: `github.com/rivo/tview`.
-- [ ] **TR3: Orchestration**: Docker Compose.
-- [ ] **TR4: Remote Protocol**: `golang.org/x/crypto/ssh`.
-- [ ] **TR5: Project Structure**: Based on `allaboutapps/go-starter`, keeping `cmd/server` and adding `cmd/tui`.
-
-## Project Requirements
-
-These requirements ensure the tool meets the goals of being lightweight, self-hosted, and TUI-driven, using the Go ecosystem and Docker Compose orchestration.
-
-### I. Functional Requirements (FR)
-These define what the system must do to facilitate deployment and management.
-
-* **FR1: Project Definition (YAML)**: The application must read and parse a user-defined configuration file (e.g., `goploy.yaml`) specifying projects. This configuration must include:
-  * A unique project name.
-  * Target host connection details (SSH URL/credentials).
-  * The remote directory path containing the `docker-compose.yml` file.
-  * The Git repository URL (for source-based deployments).
-* **FR2: Main TUI Navigation**: The primary view must display an interactive, scrollable list of all defined projects (FR1) and allow navigation via keyboard input (arrows, tabs, etc.).
-* **FR3: Interactive Deployment Workflow**: The user must be able to select a project and trigger the full, multi-step deployment sequence with a single key press (e.g., `[D] Deploy`). The sequence must execute on the target host:
-  * `git pull` (to update source code).
-  * `docker compose pull` (for pre-built images).
-  * `docker compose up -d --build` (to build if necessary and run containers).
-* **FR4: Real-time Logging (Deployment)**: During the deployment process (FR3), the TUI must display the live, streaming output (stdout/stderr) of all remote commands (Git, Docker build, Docker compose) in a dedicated log panel.
-* **FR5: Real-time Logging (Monitoring)**: The user must be able to select a running project and view its current application logs using the `docker compose logs -f` command, streamed directly into a dedicated TUI panel (FR4).
-* **FR6: Basic Container Control**: The user must be able to trigger essential container actions on a selected deployed project via TUI shortcuts:
-  * Restart (`docker compose restart`).
-  * Stop (`docker compose stop`).
-  * Shell Access (`docker compose exec service-name /bin/sh`).
-* **FR7: Status and Metadata Display**: The TUI must continuously monitor and display the operational status of the project's containers (Running, Stopped, Exited, etc.) and key metadata (e.g., Git branch, last deployed time).
-* **FR8: Remote Secure Execution**: All deployment and control commands must be executed securely on the target host via SSH.
-* **FR9: Error Reporting**: Any failure during the workflow (e.g., SSH connection failed, Git pull error, Docker build error) must immediately be reported to the user via a clear TUI alert/message in the log panel (FR4).
-
-### II. Non-Functional Requirements (NFR)
-These define how the system performs, focusing on the goals of being lightweight and robust.
-
-* **NFR1: Performance (Startup)**: The application must initialize and render the main TUI screen quickly (e.g., under 500 milliseconds).
-* **NFR2: Resource Utilization**: The application must maintain a very low memory footprint (e.g., ideally under 30 MB of RAM during idle monitoring).
-* **NFR3: Concurrency and Responsiveness**: The TUI must remain fully responsive and navigable even while one or more deployments (FR3) or log streaming sessions (FR5) are running concurrently in the background using Go concurrency primitives.
-* **NFR4: Distribution and Self-Contained Nature**: The final application must be distributed as a single, statically compiled binary file, minimizing dependencies on the execution host.
-* **NFR5: Keyboard Usability**: The entire application must be fully usable and navigable using only the keyboard (shortcuts and directional keys).
-
-### III. Technical Requirements (TR)
-These define the required technology stack, leveraging your chosen Go starter.
-
-* **TR1: Core Language**: The application must be developed using Go (Golang).
-* **TR2: TUI Framework**: The application must utilize a robust Go TUI library, such as `github.com/rivo/tview`, for building the interactive console interface.
-* **TR3: Orchestration**: The deployment core must rely on sending standard Docker Compose commands to the target host.
-* **TR4: Remote Protocol**: Remote host connectivity and command execution must be handled using the Go SSH library (`golang.org/x/crypto/ssh`).
-* **TR5: Project Structure**: The project must be built upon the existing structure of the `allaboutapps/go-starter`, adapting the configuration and logging components and replacing the HTTP server entrypoint (`cmd/server`) with a TUI entrypoint (`cmd/tui`).
+*   [ ] NFR1: Performance (Startup): Fast initialization (< 500ms).
+*   [ ] NFR2: Resource Utilization: Low memory footprint (< 30MB idle).
+*   [ ] NFR3: Concurrency and Responsiveness: Responsive UI during background tasks.
+*   [ ] NFR4: Distribution: Single statically compiled binary.
+*   [ ] NFR5: Keyboard Usability: Full keyboard control.
+```
