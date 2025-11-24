@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"sync"
 	// "io" // Removed unused import
 	"github.com/rivo/tview"
     "allaboutapps.dev/aw/go-starter/internal/config"
@@ -13,7 +16,12 @@ type App struct {
 	Config   *config.GoployConfig
     Pages    *tview.Pages
 	LogView  *tview.TextView
-	Deployer deployment.Deployer
+	Controller deployment.Controller
+
+	// State for managing running tasks
+	logCancelCtx context.Context
+	logCancel    context.CancelFunc
+	mu           sync.Mutex
 }
 
 func NewApp(cfg *config.GoployConfig) *App {
@@ -21,7 +29,7 @@ func NewApp(cfg *config.GoployConfig) *App {
 		TviewApp: tview.NewApplication(),
 		Config:   cfg,
         Pages:    tview.NewPages(),
-		Deployer: deployment.NewSSHDeployer(),
+		Controller: deployment.NewSSHClient(),
 	}
 
     // Initialize the UI
@@ -39,11 +47,14 @@ func (a *App) setupUI() {
 		SetChangedFunc(func() {
 			a.TviewApp.Draw()
 		})
-	a.LogView.SetBorder(true).SetTitle("Deployment Logs (FR4)")
+	a.LogView.SetBorder(true).SetTitle("Logs")
 
     // Create the project list
-    projectList := NewProjectList(a.Config.Projects, func(project config.Project) {
-		a.handleDeployment(project)
+    projectList := NewProjectList(a.Config.Projects, &ProjectListHandlers{
+		OnDeploy: func(p config.Project) { a.handleDeployment(p) },
+		OnLogs:   func(p config.Project) { a.handleLogs(p) },
+		OnRestart: func(p config.Project) { a.handleRestart(p) },
+		OnStop:    func(p config.Project) { a.handleStop(p) },
 	})
 
     // Using a Flex layout for future expansion (e.g. Logs on the right)
@@ -59,20 +70,98 @@ func (a *App) Run() error {
 	return a.TviewApp.Run()
 }
 
+func (a *App) getWriter() io.Writer {
+	return &ThreadSafeWriter{
+		App:  a.TviewApp,
+		View: a.LogView,
+	}
+}
+
+func (a *App) cancelPreviousTask() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.logCancel != nil {
+		a.logCancel()
+		a.logCancel = nil
+	}
+}
+
 func (a *App) handleDeployment(project config.Project) {
+	a.cancelPreviousTask()
+	a.LogView.SetTitle("Deployment Logs (FR4)")
 	a.LogView.Clear()
 	fmt.Fprintf(a.LogView, "[yellow]Starting deployment for %s...[white]\n", project.Name)
 
 	go func() {
-		writer := &ThreadSafeWriter{
-			App:  a.TviewApp,
-			View: a.LogView,
-		}
-		err := a.Deployer.Deploy(project, writer)
+		writer := a.getWriter()
+		err := a.Controller.Deploy(project, writer)
 		if err != nil {
 			fmt.Fprintf(writer, "[red]Deployment failed: %v[white]\n", err)
 		} else {
 			fmt.Fprintf(writer, "[green]Deployment finished successfully.[white]\n")
+		}
+	}()
+}
+
+func (a *App) handleLogs(project config.Project) {
+	a.cancelPreviousTask()
+	a.LogView.SetTitle("Monitoring Logs (FR5) - Press any other action to stop")
+	a.LogView.Clear()
+	fmt.Fprintf(a.LogView, "[yellow]Streaming logs for %s...[white]\n", project.Name)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	a.mu.Lock()
+	a.logCancel = cancel
+	a.mu.Unlock()
+
+	go func() {
+		writer := a.getWriter()
+		err := a.Controller.StreamLogs(ctx, project, writer)
+		// If cancelled, err might be nil or Canceled depending on implementation.
+		// We can check context error.
+		if ctx.Err() == context.Canceled {
+			fmt.Fprintf(writer, "[yellow]Log streaming stopped.[white]\n")
+			return
+		}
+
+		if err != nil {
+			fmt.Fprintf(writer, "[red]Log streaming failed: %v[white]\n", err)
+		} else {
+			fmt.Fprintf(writer, "[yellow]Log streaming ended.[white]\n")
+		}
+	}()
+}
+
+func (a *App) handleRestart(project config.Project) {
+	a.cancelPreviousTask()
+	a.LogView.SetTitle("Control (FR6)")
+	a.LogView.Clear()
+	fmt.Fprintf(a.LogView, "[yellow]Restarting %s...[white]\n", project.Name)
+
+	go func() {
+		writer := a.getWriter()
+		err := a.Controller.Restart(project, writer)
+		if err != nil {
+			fmt.Fprintf(writer, "[red]Restart failed: %v[white]\n", err)
+		} else {
+			fmt.Fprintf(writer, "[green]Restart finished successfully.[white]\n")
+		}
+	}()
+}
+
+func (a *App) handleStop(project config.Project) {
+	a.cancelPreviousTask()
+	a.LogView.SetTitle("Control (FR6)")
+	a.LogView.Clear()
+	fmt.Fprintf(a.LogView, "[yellow]Stopping %s...[white]\n", project.Name)
+
+	go func() {
+		writer := a.getWriter()
+		err := a.Controller.Stop(project, writer)
+		if err != nil {
+			fmt.Fprintf(writer, "[red]Stop failed: %v[white]\n", err)
+		} else {
+			fmt.Fprintf(writer, "[green]Stop finished successfully.[white]\n")
 		}
 	}()
 }
