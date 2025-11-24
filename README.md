@@ -8,8 +8,8 @@ Goploy TUI is a lightweight, self-hosted, TUI-based deployment manager.
 
 - [x] **FR1: Project Definition (YAML)**: Parse user-defined configuration (e.g., `goploy.yaml`) specifying projects (Name, Host, Path, Repo).
 - [x] **FR2: Main TUI Navigation**: Interactive list of projects with keyboard navigation.
-- [ ] **FR3: Interactive Deployment Workflow**: Trigger deployment (git pull, docker compose pull/up) via key press.
-- [ ] **FR4: Real-time Logging (Deployment)**: Stream output of remote commands to a log panel.
+- [x] **FR3: Interactive Deployment Workflow**: Trigger deployment (git pull, docker compose pull/up) via key press.
+- [x] **FR4: Real-time Logging (Deployment)**: Stream output of remote commands to a log panel.
 - [ ] **FR5: Real-time Logging (Monitoring)**: Stream application logs (`docker compose logs -f`) to a log panel.
 - [ ] **FR6: Basic Container Control**: Restart, Stop, and Shell Access via shortcuts.
 - [ ] **FR7: Status and Metadata Display**: Monitor container status and metadata.

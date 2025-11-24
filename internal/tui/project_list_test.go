@@ -13,7 +13,12 @@ func TestNewProjectList(t *testing.T) {
 		{Name: "Project B", Host: "host2", Path: "/path/b", Repo: "repo2"},
 	}
 
-	list := NewProjectList(projects)
+	var selectedProject config.Project
+	onSelect := func(p config.Project) {
+		selectedProject = p
+	}
+
+	list := NewProjectList(projects, onSelect)
 
 	assert.NotNil(t, list)
 	assert.Equal(t, 2, list.GetItemCount())
@@ -25,4 +30,8 @@ func TestNewProjectList(t *testing.T) {
 	mainText, secondaryText = list.GetItemText(1)
 	assert.Equal(t, "Project B", mainText)
 	assert.Contains(t, secondaryText, "host2")
+
+    // We can't easily trigger the callback without simulating tview events or exposing internal handlers,
+    // but we can at least assert the captured variable `selectedProject` is empty initially.
+    assert.Empty(t, selectedProject.Name)
 }
