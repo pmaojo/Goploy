@@ -3,15 +3,11 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
-	"time"
 
 	"allaboutapps.dev/aw/go-starter/internal/mailer/transport"
-	"allaboutapps.dev/aw/go-starter/internal/push/provider"
 	"allaboutapps.dev/aw/go-starter/internal/util"
 	"github.com/rs/zerolog"
-	"golang.org/x/text/language"
 )
 
 type EchoServer struct {
@@ -51,37 +47,9 @@ type EchoServerSecureMiddleware struct {
 	ReferrerPolicy        string
 }
 
-type AuthServer struct {
-	AccessTokenValidity                time.Duration
-	PasswordResetTokenValidity         time.Duration
-	PasswordResetTokenDebounceDuration time.Duration
-	PasswordResetTokenReuseDuration    time.Duration
-	DefaultUserScopes                  []string
-	LastAuthenticatedAtThreshold       time.Duration
-	RegistrationRequiresConfirmation   bool
-	ConfirmationTokenValidity          time.Duration
-	ConfirmationTokenDebounceDuration  time.Duration
-}
-
-type PathsServer struct {
-	APIBaseDirAbs               string
-	MntBaseDirAbs               string
-	AppleAppSiteAssociationFile string
-	AndroidAssetlinksFile       string
-}
-
 type ManagementServer struct {
 	Secret                  string `json:"-"` // sensitive
-	ReadinessTimeout        time.Duration
-	LivenessTimeout         time.Duration
-	ProbeWriteablePathsAbs  []string
-	ProbeWriteableTouchfile string
 	EnableMetrics           bool
-}
-
-type FrontendServer struct {
-	BaseURL               string
-	PasswordResetEndpoint string
 }
 
 type LoggerServer struct {
@@ -96,25 +64,18 @@ type LoggerServer struct {
 	PrettyPrintConsole bool
 }
 
-type I18n struct {
-	DefaultLanguage language.Tag
-	BundleDirAbs    string
-}
-
 type Server struct {
-	Database   Database
 	Echo       EchoServer
 	Pprof      PprofServer
-	Paths      PathsServer
-	Auth       AuthServer
 	Management ManagementServer
 	Mailer     Mailer
 	SMTP       transport.SMTPMailTransportConfig
-	Frontend   FrontendServer
 	Logger     LoggerServer
-	Push       PushService
-	FCMConfig  provider.FCMConfig
-	I18n       I18n
+	Goploy     GoployServer
+}
+
+type GoployServer struct {
+	APIKey string `json:"-"` // sensitive
 }
 
 // DefaultServiceConfigFromEnv returns the server config as parsed from environment variables
@@ -137,19 +98,6 @@ func DefaultServiceConfigFromEnv() Server {
 	}
 
 	return Server{
-		Database: Database{
-			Host:     util.GetEnv("PGHOST", "postgres"),
-			Port:     util.GetEnvAsInt("PGPORT", 5432),
-			Database: util.GetEnv("PGDATABASE", "development"),
-			Username: util.GetEnv("PGUSER", "dbuser"),
-			Password: util.GetEnv("PGPASSWORD", ""),
-			AdditionalParams: map[string]string{
-				"sslmode": util.GetEnv("PGSSLMODE", "disable"),
-			},
-			MaxOpenConns:    util.GetEnvAsInt("DB_MAX_OPEN_CONNS", runtime.NumCPU()*2),
-			MaxIdleConns:    util.GetEnvAsInt("DB_MAX_IDLE_CONNS", 1),
-			ConnMaxLifetime: time.Second * time.Duration(util.GetEnvAsInt("DB_CONN_MAX_LIFETIME_SEC", 60)),
-		},
 		Echo: EchoServer{
 			Debug:                          util.GetEnvAsBool("SERVER_ECHO_DEBUG", false),
 			ListenAddress:                  util.GetEnv("SERVER_ECHO_LISTEN_ADDRESS", ":8080"),
@@ -184,32 +132,9 @@ func DefaultServiceConfigFromEnv() Server {
 			RuntimeBlockProfileRate:     util.GetEnvAsInt("SERVER_PPROF_RUNTIME_BLOCK_PROFILE_RATE", 0),
 			RuntimeMutexProfileFraction: util.GetEnvAsInt("SERVER_PPROF_RUNTIME_MUTEX_PROFILE_FRACTION", 0),
 		},
-		Paths: PathsServer{
-			// Please ALWAYS work with ABSOLUTE (ABS) paths from ENV_VARS (however you may resolve a project-relative to absolute for the default value)
-			APIBaseDirAbs:               util.GetEnv("SERVER_PATHS_API_BASE_DIR_ABS", filepath.Join(util.GetProjectRootDir(), "/api")),        // /app/api (swagger.yml)
-			MntBaseDirAbs:               util.GetEnv("SERVER_PATHS_MNT_BASE_DIR_ABS", filepath.Join(util.GetProjectRootDir(), "/assets/mnt")), // /app/assets/mnt (user-generated content)
-			AppleAppSiteAssociationFile: util.GetEnv("SERVER_PATHS_APPLE_APP_SITE_ASSOCIATION_FILE", ""),
-			AndroidAssetlinksFile:       util.GetEnv("SERVER_PATHS_ANDROID_ASSETLINKS_FILE", ""),
-		},
-		Auth: AuthServer{
-			AccessTokenValidity:                time.Second * time.Duration(util.GetEnvAsInt("SERVER_AUTH_ACCESS_TOKEN_VALIDITY", 86400)),
-			PasswordResetTokenValidity:         time.Second * time.Duration(util.GetEnvAsInt("SERVER_AUTH_PASSWORD_RESET_TOKEN_VALIDITY", 900)),
-			PasswordResetTokenDebounceDuration: time.Second * time.Duration(util.GetEnvAsInt("SERVER_AUTH_PASSWORD_RESET_TOKEN_DEBOUNCE_DURATION_SECONDS", 60)),
-			PasswordResetTokenReuseDuration:    time.Second * time.Duration(util.GetEnvAsInt("SERVER_AUTH_PASSWORD_RESET_TOKEN_REUSE_DURATION_SECONDS", 0)),
-			DefaultUserScopes:                  util.GetEnvAsStringArr("SERVER_AUTH_DEFAULT_USER_SCOPES", []string{"app"}),
-			LastAuthenticatedAtThreshold:       time.Second * time.Duration(util.GetEnvAsInt("SERVER_AUTH_LAST_AUTHENTICATED_AT_THRESHOLD", 900)),
-			RegistrationRequiresConfirmation:   util.GetEnvAsBool("SERVER_AUTH_REGISTRATION_REQUIRES_CONFIRMATION", false),
-			ConfirmationTokenValidity:          time.Second * time.Duration(util.GetEnvAsInt("SERVER_AUTH_CONFIRMATION_TOKEN_VALIDITY_SECONDS", 86400)),
-			ConfirmationTokenDebounceDuration:  time.Second * time.Duration(util.GetEnvAsInt("SERVER_AUTH_CONFIRMATION_TOKEN_DEBOUNCE_DURATION_SECONDS", 60)),
-		},
 		Management: ManagementServer{
-			Secret:           util.GetMgmtSecret("SERVER_MANAGEMENT_SECRET"),
-			ReadinessTimeout: time.Second * time.Duration(util.GetEnvAsInt("SERVER_MANAGEMENT_READINESS_TIMEOUT_SEC", 4)),
-			LivenessTimeout:  time.Second * time.Duration(util.GetEnvAsInt("SERVER_MANAGEMENT_LIVENESS_TIMEOUT_SEC", 9)),
-			ProbeWriteablePathsAbs: util.GetEnvAsStringArr("SERVER_MANAGEMENT_PROBE_WRITEABLE_PATHS_ABS", []string{
-				filepath.Join(util.GetProjectRootDir(), "/assets/mnt")}, ","),
-			ProbeWriteableTouchfile: util.GetEnv("SERVER_MANAGEMENT_PROBE_WRITEABLE_TOUCHFILE", ".healthy"),
-			EnableMetrics:           util.GetEnvAsBool("SERVER_MANAGEMENT_ENABLE_METRICS", false),
+			Secret:        util.GetMgmtSecret("SERVER_MANAGEMENT_SECRET"),
+			EnableMetrics: util.GetEnvAsBool("SERVER_MANAGEMENT_ENABLE_METRICS", false),
 		},
 		Mailer: Mailer{
 			DefaultSender:               util.GetEnv("SERVER_MAILER_DEFAULT_SENDER", "go-starter@example.com"),
@@ -226,10 +151,6 @@ func DefaultServiceConfigFromEnv() Server {
 			Encryption: transport.SMTPEncryption(util.GetEnvEnum("SERVER_SMTP_ENCRYPTION", transport.SMTPEncryptionNone.String(), []string{transport.SMTPEncryptionNone.String(), transport.SMTPEncryptionTLS.String(), transport.SMTPEncryptionStartTLS.String()})),
 			TLSConfig:  nil,
 		},
-		Frontend: FrontendServer{
-			BaseURL:               util.GetEnv("SERVER_FRONTEND_BASE_URL", "http://localhost:3000"),
-			PasswordResetEndpoint: util.GetEnv("SERVER_FRONTEND_PASSWORD_RESET_ENDPOINT", "/set-new-password"),
-		},
 		Logger: LoggerServer{
 			Level:              util.LogLevelFromString(util.GetEnv("SERVER_LOGGER_LEVEL", zerolog.DebugLevel.String())),
 			RequestLevel:       util.LogLevelFromString(util.GetEnv("SERVER_LOGGER_REQUEST_LEVEL", zerolog.DebugLevel.String())),
@@ -241,18 +162,8 @@ func DefaultServiceConfigFromEnv() Server {
 			LogCaller:          util.GetEnvAsBool("SERVER_LOGGER_LOG_CALLER", false),
 			PrettyPrintConsole: util.GetEnvAsBool("SERVER_LOGGER_PRETTY_PRINT_CONSOLE", false),
 		},
-		Push: PushService{
-			UseFCMProvider:  util.GetEnvAsBool("SERVER_PUSH_USE_FCM", false),
-			UseMockProvider: util.GetEnvAsBool("SERVER_PUSH_USE_MOCK", true),
-		},
-		FCMConfig: provider.FCMConfig{
-			GoogleApplicationCredentials: util.GetEnv("GOOGLE_APPLICATION_CREDENTIALS", ""),
-			ProjectID:                    util.GetEnv("SERVER_FCM_PROJECT_ID", "no-fcm-project-id-set"),
-			ValidateOnly:                 util.GetEnvAsBool("SERVER_FCM_VALIDATE_ONLY", true),
-		},
-		I18n: I18n{
-			DefaultLanguage: util.GetEnvAsLanguageTag("SERVER_I18N_DEFAULT_LANGUAGE", language.English),
-			BundleDirAbs:    util.GetEnv("SERVER_I18N_BUNDLE_DIR_ABS", filepath.Join(util.GetProjectRootDir(), "/web/i18n")), // /app/web/i18n
+		Goploy: GoployServer{
+			APIKey: util.GetEnv("GOPLOY_API_KEY", ""),
 		},
 	}
 }
