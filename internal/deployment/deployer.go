@@ -3,6 +3,7 @@ package deployment
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -338,12 +339,8 @@ func (c *SSHClient) RunShell(project config.Project, service string) error {
 	session.Stdout = os.Stdout
 	session.Stderr = os.Stderr
 
-	if err := session.Run(remoteCommand); err != nil {
-		if _, ok := err.(*ssh.ExitError); ok {
-			// Process exited with non-zero status
-			return nil // It's expected when user exits shell
-		}
-		return fmt.Errorf("remote shell error: %w", err)
+	if err := handleRunShellError(session.Run(remoteCommand)); err != nil {
+		return err
 	}
 
 	return nil
@@ -441,23 +438,38 @@ func (c *SSHClient) runSession(client *ssh.Client, cmd string, stdout, stderr io
 		return fmt.Errorf("failed to start command: %w", err)
 	}
 
+	return waitForSession(ctx, session.Wait)
+}
+
+func waitForSession(ctx context.Context, wait func() error) error {
+	if ctx == nil {
+		return wait()
+	}
+
 	done := make(chan error, 1)
 	go func() {
-		done <- session.Wait()
+		done <- wait()
 	}()
 
 	select {
 	case err := <-done:
 		return err
 	case <-ctx.Done():
-		// Attempt to send signal or close session
-		// session.Signal(ssh.SIGINT) or just close
-		// Closing session usually kills the remote command if pty is not allocated,
-		// but here we didn't allocate pty for batch commands.
-		// We'll return nil if cancelled intentionally? Or ctx error.
-		// The caller (StreamLogs) expects to return when ctx is done.
 		return ctx.Err()
 	}
+}
+
+func handleRunShellError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var exitErr *ssh.ExitError
+	if errors.As(err, &exitErr) {
+		return fmt.Errorf("remote shell exited with status %d: %w", exitErr.ExitStatus(), err)
+	}
+
+	return fmt.Errorf("remote shell error: %w", err)
 }
 
 func parseDockerTime(s string) (time.Time, error) {
