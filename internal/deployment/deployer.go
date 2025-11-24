@@ -2,11 +2,13 @@ package deployment
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"allaboutapps.dev/aw/go-starter/internal/config"
 )
@@ -19,6 +21,7 @@ type Controller interface {
 	Stop(project config.Project, output io.Writer) error
 	ListServices(project config.Project) ([]string, error)
 	RunShell(project config.Project, service string) error
+	GetStatus(ctx context.Context, project config.Project) (ProjectStatus, error)
 }
 
 // SSHClient implements Controller using the system's `ssh` binary.
@@ -27,6 +30,8 @@ type SSHClient struct {
 	// If nil, it uses the real os/exec.Command.
 	CmdRunner func(name string, arg ...string) *exec.Cmd
 }
+
+var _ Controller = (*SSHClient)(nil)
 
 // NewSSHClient creates a new SSHClient.
 func NewSSHClient() *SSHClient {
@@ -38,7 +43,7 @@ func (c *SSHClient) Deploy(project config.Project, output io.Writer) error {
 	fmt.Fprintf(output, "Connecting to %s...\n", project.Host)
 
 	commands := []string{
-		fmt.Sprintf("cd %s", project.Path),
+		fmt.Sprintf("cd %q", project.Path),
 		"git pull",
 		"docker compose pull",
 		"docker compose up -d --build",
@@ -57,7 +62,7 @@ func (c *SSHClient) StreamLogs(ctx context.Context, project config.Project, outp
 
 	// Command: cd path && docker compose logs -f
 	commands := []string{
-		fmt.Sprintf("cd %s", project.Path),
+		fmt.Sprintf("cd %q", project.Path),
 		"docker compose logs -f",
 	}
 	remoteCommand := strings.Join(commands, " && ")
@@ -72,7 +77,7 @@ func (c *SSHClient) Restart(project config.Project, output io.Writer) error {
 	fmt.Fprintf(output, "Restarting project on %s...\n", project.Host)
 
 	commands := []string{
-		fmt.Sprintf("cd %s", project.Path),
+		fmt.Sprintf("cd %q", project.Path),
 		"docker compose restart",
 	}
 	remoteCommand := strings.Join(commands, " && ")
@@ -87,7 +92,7 @@ func (c *SSHClient) Stop(project config.Project, output io.Writer) error {
 	fmt.Fprintf(output, "Stopping project on %s...\n", project.Host)
 
 	commands := []string{
-		fmt.Sprintf("cd %s", project.Path),
+		fmt.Sprintf("cd %q", project.Path),
 		"docker compose stop",
 	}
 	remoteCommand := strings.Join(commands, " && ")
@@ -100,7 +105,7 @@ func (c *SSHClient) Stop(project config.Project, output io.Writer) error {
 // ListServices fetches the list of services for the project.
 func (c *SSHClient) ListServices(project config.Project) ([]string, error) {
 	commands := []string{
-		fmt.Sprintf("cd %s", project.Path),
+		fmt.Sprintf("cd %q", project.Path),
 		"docker compose config --services",
 	}
 	remoteCommand := strings.Join(commands, " && ")
@@ -137,7 +142,7 @@ func (c *SSHClient) ListServices(project config.Project) ([]string, error) {
 // RunShell starts an interactive shell session for the service.
 func (c *SSHClient) RunShell(project config.Project, service string) error {
 	commands := []string{
-		fmt.Sprintf("cd %s", project.Path),
+		fmt.Sprintf("cd %q", project.Path),
 		fmt.Sprintf("docker compose exec -it %s /bin/sh", service),
 	}
 	remoteCommand := strings.Join(commands, " && ")
@@ -162,6 +167,117 @@ func (c *SSHClient) RunShell(project config.Project, service string) error {
 	}
 
 	return nil
+}
+
+// GetStatus returns the status of the project.
+func (c *SSHClient) GetStatus(ctx context.Context, project config.Project) (ProjectStatus, error) {
+	// Command: cd path && (git rev-parse --abbrev-ref HEAD || echo "") && echo "---SPLIT---" && docker compose ps -a --format json
+	// We use || echo "" for git command so it doesn't fail the whole chain if it's not a git repo.
+	commands := []string{
+		fmt.Sprintf("cd %q", project.Path),
+		"(git rev-parse --abbrev-ref HEAD || echo '')",
+		"echo '---SPLIT---'",
+		"docker compose ps -a --format json",
+	}
+	remoteCommand := strings.Join(commands, " && ")
+
+	args := []string{project.Host, remoteCommand}
+	var cmd *exec.Cmd
+
+	if c.CmdRunner != nil {
+		cmd = c.CmdRunner("ssh", args...)
+	} else {
+		if ctx != nil {
+			cmd = exec.CommandContext(ctx, "ssh", args...)
+		} else {
+			cmd = exec.Command("ssh", args...)
+		}
+	}
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return ProjectStatus{}, fmt.Errorf("ssh command failed: %w (output: %s)", err, string(output))
+	}
+
+	// Parse output
+	parts := strings.Split(string(output), "---SPLIT---")
+	if len(parts) < 2 {
+		return ProjectStatus{}, fmt.Errorf("unexpected output format")
+	}
+
+	branch := strings.TrimSpace(parts[0])
+	jsonOutput := strings.TrimSpace(parts[1])
+
+	var containers []ContainerStatus
+	// docker compose ps --format json returns a JSON array or stream of objects depending on version.
+	// We'll try to unmarshal as array first.
+	if err := json.Unmarshal([]byte(jsonOutput), &containers); err != nil {
+		// If unmarshal fails, it might be line-delimited JSON objects
+		lines := strings.Split(jsonOutput, "\n")
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			var container ContainerStatus
+			if err := json.Unmarshal([]byte(line), &container); err == nil {
+				containers = append(containers, container)
+			}
+		}
+	}
+
+	// Calculate aggregated status
+	status := "Down"
+	runningCount := 0
+	if len(containers) > 0 {
+		for _, c := range containers {
+			if strings.ToLower(c.State) == "running" {
+				runningCount++
+			}
+		}
+		if runningCount == len(containers) {
+			status = "Healthy"
+		} else if runningCount > 0 {
+			status = "Partial"
+		}
+	}
+
+	// Calculate LastDeployedAt
+	var lastDeployed time.Time
+	for _, c := range containers {
+		// CreatedAt format: "2021-08-06 14:00:00 +0000 UTC"
+		// or "2021-08-06T14:00:00Z"
+		// We try to parse it.
+		// Common docker format: "2006-01-02 15:04:05 -0700 MST"
+		t, err := parseDockerTime(c.CreatedAt)
+		if err == nil {
+			if t.After(lastDeployed) {
+				lastDeployed = t
+			}
+		}
+	}
+
+	return ProjectStatus{
+		Name:           project.Name,
+		Branch:         branch,
+		LastDeployedAt: lastDeployed,
+		Status:         status,
+		Containers:     containers,
+	}, nil
+}
+
+func parseDockerTime(s string) (time.Time, error) {
+	// Try different layouts
+	layouts := []string{
+		"2006-01-02 15:04:05 -0700 MST",
+		"2006-01-02 15:04:05 +0000 UTC",
+        time.RFC3339,
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unable to parse time: %s", s)
 }
 
 // runSSH executes a remote command via SSH.

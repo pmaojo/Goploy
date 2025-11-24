@@ -13,6 +13,7 @@ type ProjectListHandlers struct {
 	OnRestart func(config.Project)
 	OnStop    func(config.Project)
 	OnShell   func(config.Project)
+	OnRefresh func(config.Project)
 }
 
 // NewProjectList creates a tview.List populated with the given projects.
@@ -55,11 +56,46 @@ func NewProjectList(projects []config.Project, handlers *ProjectListHandlers) *t
 				handlers.OnLogs(p)
 			}
 			return nil
-		case 'r', 'R': // Restart
-			if handlers.OnRestart != nil {
-				handlers.OnRestart(p)
+		case 'r', 'R': // Refresh Status (Override Restart?)
+			// Wait, 'r' is taken by Restart.
+			// Let's use 'u' for Update/Refresh or 'F5' if possible, or shift-R?
+			// User said: "R = refresh status".
+			// But previously 'r' was restart.
+			// Let's check FR6: "Basic Container Control: Restart...".
+			// If 'r' is restart, we need another key for refresh.
+			// Maybe 'ctrl-r'? Or just re-map Restart to 'T' (restarT) or something?
+			// Or check capitalization? 'r' vs 'R'?
+			// The current code handles 'r' and 'R' as Restart.
+
+			// Let's assume user wants 'R' (Shift+R) for Refresh and 'r' for Restart?
+			// The current code: case 'r', 'R': // Restart
+
+			// I'll make 'r' = Restart, 'R' (Shift+r) = Refresh?
+			// tcell event.Rune() distinguishes case.
+
+			// Wait, the block below has case 'r', 'R' falling through to same logic.
+			// I need to split them.
+
+			// But commonly 'r' is refresh in browsers.
+			// Restart is destructive. Maybe Restart should be 'R' (Harder)?
+			// Or 'ctrl-r'?
+
+			// Let's check user request: "Other projects can be refreshed on demand via a keyboard shortcut (e.g. R = refresh status for the highlighted project)."
+			// I will map 'R' (Shift+r) to Refresh, and 'r' to Restart.
+
+			if event.Rune() == 'r' {
+				if handlers.OnRestart != nil {
+					handlers.OnRestart(p)
+				}
+				return nil
+			} else if event.Rune() == 'R' {
+				if handlers.OnRefresh != nil {
+					handlers.OnRefresh(p)
+				}
+				return nil
 			}
 			return nil
+
 		case 's', 'S': // Stop
 			if handlers.OnStop != nil {
 				handlers.OnStop(p)
