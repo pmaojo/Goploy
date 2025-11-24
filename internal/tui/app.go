@@ -30,14 +30,18 @@ type App struct {
 }
 
 func NewApp(cfg *config.GoployConfig) *App {
+	// For TUI, we can pass nil mailer or initialize it if we want TUI to also send emails.
+	// Given the requirements, TUI seems focused on interactive use, but if we want consistency,
+	// we should probably initialize it. However, TUI entrypoint (cmd/tui) doesn't load server config for mailer.
+	// For now, we'll pass nil to SSHClient, assuming TUI users see the output directly.
 	app := &App{
 		TviewApp: tview.NewApplication(),
 		Config:   cfg,
-        Pages:    tview.NewPages(),
-		Controller: deployment.NewSSHClient(),
+		Pages:    tview.NewPages(),
+		Controller: deployment.NewSSHClient(nil),
 	}
 
-    // Initialize the UI
+	// Initialize the UI
     app.setupUI()
 
 	return app
@@ -223,7 +227,8 @@ func (a *App) handleDeployment(project config.Project) {
 
 	go func() {
 		writer := a.getWriter()
-		err := a.Controller.Deploy(project, writer)
+		// TUI deployment doesn't specify ref currently (uses default)
+		err := a.Controller.Deploy(project, writer, "")
 		if err != nil {
 			fmt.Fprintf(writer, "[red]Deployment failed: %v[white]\n", err)
 		} else {

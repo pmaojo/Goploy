@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"allaboutapps.dev/aw/go-starter/internal/config"
+	"allaboutapps.dev/aw/go-starter/internal/mailer"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/term"
@@ -18,7 +19,7 @@ import (
 
 // Controller defines the interface for controlling a project.
 type Controller interface {
-	Deploy(project config.Project, output io.Writer) error
+	Deploy(project config.Project, output io.Writer, ref string) error
 	StreamLogs(ctx context.Context, project config.Project, output io.Writer) error
 	Restart(project config.Project, output io.Writer) error
 	Stop(project config.Project, output io.Writer) error
@@ -28,13 +29,17 @@ type Controller interface {
 }
 
 // SSHClient implements Controller using golang.org/x/crypto/ssh.
-type SSHClient struct{}
+type SSHClient struct {
+	Mailer *mailer.Mailer
+}
 
 var _ Controller = (*SSHClient)(nil)
 
 // NewSSHClient creates a new SSHClient.
-func NewSSHClient() *SSHClient {
-	return &SSHClient{}
+func NewSSHClient(mailer *mailer.Mailer) *SSHClient {
+	return &SSHClient{
+		Mailer: mailer,
+	}
 }
 
 // connect establishes an SSH connection to the project host.
@@ -137,8 +142,12 @@ func (c *SSHClient) connect(project config.Project) (*ssh.Client, error) {
 }
 
 // Deploy connects to the project host and runs the deployment commands.
-func (c *SSHClient) Deploy(project config.Project, output io.Writer) error {
+func (c *SSHClient) Deploy(project config.Project, output io.Writer, ref string) error {
 	fmt.Fprintf(output, "Connecting to %s...\n", project.Host)
+
+	// Buffer output for email notification
+	var logBuffer strings.Builder
+	multiOutput := io.MultiWriter(output, &logBuffer)
 
 	client, err := c.connect(project)
 	if err != nil {
@@ -148,15 +157,44 @@ func (c *SSHClient) Deploy(project config.Project, output io.Writer) error {
 
 	commands := []string{
 		fmt.Sprintf("cd %q", project.Path),
+		"git fetch --all",
+	}
+
+	if ref != "" {
+		// Checkout specific ref
+		commands = append(commands, fmt.Sprintf("git checkout %s", ref))
+	}
+
+	commands = append(commands,
 		"git pull",
 		"docker compose pull",
 		"docker compose up -d --build",
-	}
+	)
 	remoteCommand := strings.Join(commands, " && ")
 
-	fmt.Fprintf(output, "Running: %s\n", remoteCommand)
+	fmt.Fprintf(multiOutput, "Running: %s\n", remoteCommand)
 
-	return c.runSession(client, remoteCommand, output, output, nil)
+	err = c.runSession(client, remoteCommand, multiOutput, multiOutput, nil)
+
+	// Send notification if configured
+	if c.Mailer != nil && len(project.NotifyEmails) > 0 {
+		status := "SUCCESS"
+		if err != nil {
+			status = "FAILURE"
+		}
+		// Run in background to not block deployment response?
+		// User said "Stream response", so maybe blocking here is fine as it's the last step.
+		// Or we can just log it.
+		// Since we want to notify "depending on yaml config", we do it here.
+		notifErr := c.Mailer.SendDeploymentNotification(context.Background(), project.NotifyEmails, project.Name, status, logBuffer.String())
+		if notifErr != nil {
+			fmt.Fprintf(output, "Failed to send notification: %v\n", notifErr)
+		} else {
+			fmt.Fprintf(output, "Notification sent to %v\n", project.NotifyEmails)
+		}
+	}
+
+	return err
 }
 
 // StreamLogs streams the logs from the remote project.

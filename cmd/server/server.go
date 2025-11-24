@@ -7,22 +7,21 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"allaboutapps.dev/aw/go-starter/cmd/db"
-	"allaboutapps.dev/aw/go-starter/cmd/probe"
 	"allaboutapps.dev/aw/go-starter/internal/api"
 	"allaboutapps.dev/aw/go-starter/internal/api/router"
 	"allaboutapps.dev/aw/go-starter/internal/config"
-	"allaboutapps.dev/aw/go-starter/internal/util"
-	"allaboutapps.dev/aw/go-starter/internal/util/command"
+	"allaboutapps.dev/aw/go-starter/internal/deployment"
+	"allaboutapps.dev/aw/go-starter/internal/mailer"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
 type Flags struct {
-	ProbeReadiness  bool
-	ApplyMigrations bool
-	SeedFixtures    bool
+	// Removed DB flags
 }
 
 func New() *cobra.Command {
@@ -31,75 +30,71 @@ func New() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "server",
 		Short: "Starts the server",
-		Long: `Starts the stateless RESTful JSON server
+		Long: `Starts the RESTful JSON server
 	
-	Requires configuration through ENV and
-	a fully migrated PostgreSQL database.`,
+	Requires configuration through ENV and goploy.yaml.`,
 		Run: func(_ *cobra.Command, _ []string) {
 			runServer(flags)
 		},
 	}
 
-	cmd.Flags().BoolVarP(&flags.ProbeReadiness, "probe", "p", false, "Probe readiness before startup.")
-	cmd.Flags().BoolVarP(&flags.ApplyMigrations, "migrate", "m", false, "Apply migrations before startup.")
-	cmd.Flags().BoolVarP(&flags.SeedFixtures, "seed", "s", false, "Seed fixtures into database before startup.")
-
 	return cmd
 }
 
 func runServer(flags Flags) {
-	err := command.WithServer(context.Background(), config.DefaultServiceConfigFromEnv(), func(ctx context.Context, s *api.Server) error {
-		log := util.LogFromContext(ctx)
+	ctx := context.Background()
+	ctx = log.With().Str("cmdExecutionId", uuid.New().String()).Logger().WithContext(ctx)
 
-		if flags.ProbeReadiness {
-			errs, err := probe.RunReadiness(ctx, s.Config, probe.ReadinessFlags{
-				Verbose: true,
-			})
-			if err != nil {
-				log.Fatal().Err(err).Msg("Failed to run readiness probes")
-			}
+	cfg := config.DefaultServiceConfigFromEnv()
 
-			if len(errs) > 0 {
-				log.Fatal().Errs("errs", errs).Msg("Unhealthy.")
-			}
-		}
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+	zerolog.SetGlobalLevel(cfg.Logger.Level)
+	if cfg.Logger.PrettyPrintConsole {
+		log.Logger = log.Output(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+			w.TimeFormat = "15:04:05"
+		}))
+	}
 
-		if flags.ApplyMigrations {
-			_, err := db.ApplyMigrations(ctx, s.Config)
-			if err != nil {
-				log.Fatal().Err(err).Msg("Error while applying migrations")
-			}
-		}
-
-		if flags.SeedFixtures {
-			err := db.ApplySeedFixtures(ctx, s.Config)
-			if err != nil {
-				log.Fatal().Err(err).Msg("Error while applying seed fixtures")
-			}
-		}
-
-		err := router.Init(s)
-		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to initialize router")
-		}
-
-		go func() {
-			if err := s.Start(); err != nil {
-				if errors.Is(err, http.ErrServerClosed) {
-					log.Info().Msg("Server closed")
-				} else {
-					log.Fatal().Err(err).Msg("Failed to start server")
-				}
-			}
-		}()
-
-		quit := make(chan os.Signal, 1)
-		signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-		<-quit
-
-		return nil
-	})
+	// Load goploy.yaml
+	goployCfg, err := config.LoadGoployConfig("goploy.yaml")
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to start server")
+		log.Fatal().Err(err).Msg("Failed to load goploy.yaml. Please ensure it exists in the current directory.")
+	}
+
+	// Initialize Mailer
+	mail, err := mailer.NewWithConfig(cfg.Mailer, cfg.SMTP)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize mailer")
+	}
+
+	// Initialize Deployment Controller
+	deployer := deployment.NewSSHClient(mail)
+
+	// Initialize Server
+	s := api.NewServer(cfg, goployCfg, mail, deployer)
+
+	err = router.Init(s)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize router")
+	}
+
+	go func() {
+		if err := s.Start(); err != nil {
+			if errors.Is(err, http.ErrServerClosed) {
+				log.Info().Msg("Server closed")
+			} else {
+				log.Fatal().Err(err).Msg("Failed to start server")
+			}
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if errs := s.Shutdown(shutdownCtx); len(errs) > 0 {
+		log.Error().Errs("shutdownErrors", errs).Msg("Failed to gracefully shut down server")
 	}
 }

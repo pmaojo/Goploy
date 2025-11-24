@@ -1,18 +1,15 @@
 package router
 
 import (
-	"context"
 	"fmt"
 	"html/template"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"allaboutapps.dev/aw/go-starter/internal/api"
 	"allaboutapps.dev/aw/go-starter/internal/api/handlers"
-	"allaboutapps.dev/aw/go-starter/internal/api/handlers/constants"
 	"allaboutapps.dev/aw/go-starter/internal/api/middleware"
 	"allaboutapps.dev/aw/go-starter/internal/api/router/templates"
 	"github.com/labstack/echo-contrib/echoprometheus"
@@ -33,21 +30,22 @@ func Init(s *api.Server) error {
 
 	files, err := os.ReadDir(s.Config.Echo.WebTemplatesViewsBaseDirAbs)
 	if err != nil {
-		return fmt.Errorf("failed to read views templates dir: %w", err)
-	}
+		// Log but don't fail, maybe we don't need views
+		log.Warn().Err(err).Msg("Failed to read views templates dir, skipping")
+	} else {
+		for _, file := range files {
+			if file.IsDir() {
+				continue
+			}
 
-	for _, file := range files {
-		if file.IsDir() {
-			continue
+			templateName := file.Name()
+			t, err := template.New(templateName).ParseGlob(filepath.Join(s.Config.Echo.WebTemplatesViewsBaseDirAbs, templateName))
+			if err != nil {
+				return fmt.Errorf("failed to parse template file: %w", err)
+			}
+
+			viewsRenderer.templates[templates.ViewTemplate(templateName)] = t
 		}
-
-		templateName := file.Name()
-		t, err := template.New(templateName).ParseGlob(filepath.Join(s.Config.Echo.WebTemplatesViewsBaseDirAbs, templateName))
-		if err != nil {
-			return fmt.Errorf("failed to parse template file: %w", err)
-		}
-
-		viewsRenderer.templates[templates.ViewTemplate(templateName)] = t
 	}
 
 	s.Echo.Renderer = viewsRenderer
@@ -55,37 +53,31 @@ func Init(s *api.Server) error {
 	s.Echo.Debug = s.Config.Echo.Debug
 	s.Echo.HideBanner = true
 	s.Echo.Logger.SetOutput(&echoLogger{level: s.Config.Logger.RequestLevel, log: log.With().Str("component", "echo").Logger()})
-	echo.NotFoundHandler = NotFoundHandler(s.Config)
 
-	s.Echo.HTTPErrorHandler = HTTPErrorHandlerWithConfig(HTTPErrorHandlerConfig{
-		HideInternalServerErrorDetails: s.Config.Echo.HideInternalServerErrorDetails,
-	})
+	// Use default NotFoundHandler or simple one as config.Frontend was removed
+	echo.NotFoundHandler = func(c echo.Context) error {
+		return c.JSON(http.StatusNotFound, echo.Map{"error": "Not Found"})
+	}
+
+	// Default HTTP error handler
+	s.Echo.HTTPErrorHandler = func(err error, c echo.Context) {
+		s.Echo.DefaultHTTPErrorHandler(err, c)
+	}
 
 	// ---
 	// General middleware
 	if s.Config.Management.EnableMetrics {
 		s.Echo.Use(echoprometheus.NewMiddleware(""))
-		err := s.Metrics.RegisterMetrics(context.Background())
-		if err != nil {
-			log.Err(err).Msg("Failed to register metrics")
-			return err
-		}
-	} else {
-		log.Warn().Msg("Disabling metrics middleware due to environment config")
 	}
 
 	if s.Config.Echo.EnableTrailingSlashMiddleware {
 		s.Echo.Pre(echoMiddleware.RemoveTrailingSlash())
-	} else {
-		log.Warn().Msg("Disabling trailing slash middleware due to environment config")
 	}
 
 	if s.Config.Echo.EnableRecoverMiddleware {
 		s.Echo.Use(echoMiddleware.RecoverWithConfig(echoMiddleware.RecoverConfig{
 			LogErrorFunc: middleware.LogErrorFuncWithRequestInfo,
 		}))
-	} else {
-		log.Warn().Msg("Disabling recover middleware due to environment config")
 	}
 
 	if s.Config.Echo.EnableSecureMiddleware {
@@ -101,14 +93,10 @@ func Init(s *api.Server) error {
 			HSTSPreloadEnabled:    s.Config.Echo.SecureMiddleware.HSTSPreloadEnabled,
 			ReferrerPolicy:        s.Config.Echo.SecureMiddleware.ReferrerPolicy,
 		}))
-	} else {
-		log.Warn().Msg("Disabling secure middleware due to environment config")
 	}
 
 	if s.Config.Echo.EnableRequestIDMiddleware {
 		s.Echo.Use(echoMiddleware.RequestID())
-	} else {
-		log.Warn().Msg("Disabling request ID middleware due to environment config")
 	}
 
 	if s.Config.Echo.EnableLoggerMiddleware {
@@ -121,19 +109,9 @@ func Init(s *api.Server) error {
 			LogResponseHeader: s.Config.Logger.LogResponseHeader,
 			LogCaller:         s.Config.Logger.LogCaller,
 			RequestBodyLogSkipper: func(req *http.Request) bool {
-				// We skip all body logging for auth endpoints as these might contain credentials
-				if strings.HasPrefix(req.URL.Path, "/api/v1/auth") {
-					return true
-				}
-
 				return middleware.DefaultRequestBodyLogSkipper(req)
 			},
 			ResponseBodyLogSkipper: func(req *http.Request, res *echo.Response) bool {
-				// We skip all body logging for auth endpoints as these might contain credentials
-				if strings.HasPrefix(req.URL.Path, "/api/v1/auth") {
-					return true
-				}
-
 				return middleware.DefaultResponseBodyLogSkipper(req, res)
 			},
 			Skipper: func(c echo.Context) bool {
@@ -145,20 +123,14 @@ func Init(s *api.Server) error {
 				return false
 			},
 		}))
-	} else {
-		log.Warn().Msg("Disabling logger middleware due to environment config")
 	}
 
 	if s.Config.Echo.EnableCORSMiddleware {
 		s.Echo.Use(echoMiddleware.CORS())
-	} else {
-		log.Warn().Msg("Disabling CORS middleware due to environment config")
 	}
 
 	if s.Config.Echo.EnableCacheControlMiddleware {
 		s.Echo.Use(middleware.CacheControl())
-	} else {
-		log.Warn().Msg("Disabling cache control middleware due to environment config")
 	}
 
 	if s.Config.Pprof.Enable {
@@ -189,9 +161,6 @@ func Init(s *api.Server) error {
 		}
 	}
 
-	// Add your custom / additional middlewares here.
-	// see https://echo.labstack.com/middleware
-
 	// ---
 	// Initialize our general groups and set middleware to use above them
 	s.Router = &api.Router{
@@ -216,27 +185,17 @@ func Init(s *api.Server) error {
 			},
 		}), middleware.NoCache()),
 
-		// OAuth2, unsecured or secured by bearer auth, available at /api/v1/auth/**
-		APIV1Auth: s.Echo.Group("/api/v1/auth", middleware.AuthWithConfig(middleware.AuthConfig{
-			S:    s,
-			Mode: middleware.AuthModeRequired,
-			Skipper: func(c echo.Context) bool {
-				switch c.Path() {
-				case "/api/v1/auth/forgot-password",
-					"/api/v1/auth/forgot-password/complete",
-					"/api/v1/auth/login",
-					"/api/v1/auth/refresh",
-					"/api/v1/auth/register",
-					fmt.Sprintf("/api/v1/auth/register/:%s", constants.RegistrationTokenParam):
-					return true
-				}
-				return false
+		// Goploy Project Endpoints
+		// Secured by Bearer token (GOPLOY_API_KEY)
+		APIV1Projects: s.Echo.Group("/api/v1/projects", echoMiddleware.KeyAuthWithConfig(echoMiddleware.KeyAuthConfig{
+			KeyLookup: "header:Authorization",
+			AuthScheme: "Bearer",
+			Validator: func(key string, c echo.Context) (bool, error) {
+				return key == s.Config.Goploy.APIKey, nil
 			},
 		})),
-		WellKnown: s.Echo.Group("/.well-known"),
 
-		// Your other endpoints, typically secured by bearer auth, available at /api/v1/**
-		APIV1Push: s.Echo.Group("/api/v1/push", middleware.Auth(s)),
+		WellKnown: s.Echo.Group("/.well-known"),
 	}
 
 	// ---
