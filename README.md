@@ -1,23 +1,3 @@
-```markdown
-# Goploy TUI
-
-<p align="center">
-  <img src="https://i.imgur.com/your-logo-placeholder.png" alt="Goploy TUI Logo" width="150"/>
-</p>
-
-<p align="center">
-  <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.21+-00ADD8?style=for-the-badge&logo=go" alt="Go Version"></a>
-  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"></a>
-  <a href="https://github.com/your-org/goploy-tui/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" alt="License: MIT"></a>
-  <a href="https://github.com/your-org/goploy-tui/releases/latest"><img src="https://img.shields.io/github/v/release/your-org/goploy-tui?style=for-the-badge&sort=semver" alt="Latest Release"></a>
-</p>
-
-<p align="center">
-  <i>A lightweight, self-hosted, TUI-based deployment manager for your Go and Docker Compose projects.</i>
-</p>
-
----
-
 ## 🌟 About
 
 **Goploy TUI** is your command-line companion for effortless, self-hosted application deployment and management. Designed for developers who love the terminal, it provides a powerful yet intuitive Text User Interface (TUI) to interact with your remote projects.
@@ -163,4 +143,4 @@ Here's an overview of the current and planned features for Goploy TUI:
 *   [ ] NFR3: Concurrency and Responsiveness: Responsive UI during background tasks.
 *   [ ] NFR4: Distribution: Single statically compiled binary.
 *   [ ] NFR5: Keyboard Usability: Full keyboard control.
-```
+
