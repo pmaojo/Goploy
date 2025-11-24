@@ -12,7 +12,7 @@ Goploy TUI is a lightweight, self-hosted, TUI-based deployment manager.
 - [x] **FR4: Real-time Logging (Deployment)**: Stream output of remote commands to a log panel.
 - [x] **FR5: Real-time Logging (Monitoring)**: Stream application logs (`docker compose logs -f`) to a log panel.
 - [x] **FR6: Basic Container Control**: Restart, Stop, and Shell Access via shortcuts.
-- [ ] **FR7: Status and Metadata Display**: Monitor container status and metadata.
+- [x] **FR7: Status and Metadata Display**: Monitor container status and metadata.
 - [ ] **FR8: Remote Secure Execution**: Execute commands via SSH.
 - [ ] **FR9: Error Reporting**: Report failures in the TUI.
 
