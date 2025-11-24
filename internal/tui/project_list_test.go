@@ -14,11 +14,13 @@ func TestNewProjectList(t *testing.T) {
 	}
 
 	var selectedProject config.Project
-	onSelect := func(p config.Project) {
-		selectedProject = p
+	handlers := &ProjectListHandlers{
+		OnDeploy: func(p config.Project) {
+			selectedProject = p
+		},
 	}
 
-	list := NewProjectList(projects, onSelect)
+	list := NewProjectList(projects, handlers)
 
 	assert.NotNil(t, list)
 	assert.Equal(t, 2, list.GetItemCount())
