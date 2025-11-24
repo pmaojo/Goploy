@@ -1,13 +1,20 @@
 projects:
   - name: "Marketing Site"
-    host: "ssh://deploy@192.168.1.10:22"
+    host: "192.168.1.10"
+    user: "deploy"
+    port: "22"
+    identity_file: "~/.ssh/id_rsa"
     path: "/var/www/marketing"
     repo: "git@github.com:company/marketing.git"
   - name: "Backend API"
-    host: "ssh://admin@api.production.com"
+    host: "api.production.com"
+    user: "admin"
+    identity_file: "/home/user/.ssh/prod_key"
     path: "/opt/services/backend"
     repo: "https://github.com/company/backend.git"
   - name: "Internal Tools"
-    host: "ssh://user@intranet.local"
+    host: "intranet.local"
+    # User and Port can be omitted if defaults/config are used,
+    # but explicit configuration is recommended for this tool.
     path: "/home/user/tools"
     repo: "git@gitlab.local:dev/tools.git"

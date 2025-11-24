@@ -11,10 +11,13 @@ type GoployConfig struct {
 
 // Project represents a single project configuration.
 type Project struct {
-	Name string `yaml:"name"`
-	Host string `yaml:"host"`
-	Path string `yaml:"path"`
-	Repo string `yaml:"repo"`
+	Name         string `yaml:"name"`
+	Host         string `yaml:"host"`
+	User         string `yaml:"user"`
+	Port         string `yaml:"port"`
+	IdentityFile string `yaml:"identity_file"`
+	Path         string `yaml:"path"`
+	Repo         string `yaml:"repo"`
 }
 
 // ParseGoployConfig parses the provided YAML data into a GoployConfig struct.

@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
 	"allaboutapps.dev/aw/go-starter/internal/config"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/term"
 )
 
 // Controller defines the interface for controlling a project.
@@ -24,12 +27,8 @@ type Controller interface {
 	GetStatus(ctx context.Context, project config.Project) (ProjectStatus, error)
 }
 
-// SSHClient implements Controller using the system's `ssh` binary.
-type SSHClient struct {
-	// CmdRunner allows mocking the command execution for testing.
-	// If nil, it uses the real os/exec.Command.
-	CmdRunner func(name string, arg ...string) *exec.Cmd
-}
+// SSHClient implements Controller using golang.org/x/crypto/ssh.
+type SSHClient struct{}
 
 var _ Controller = (*SSHClient)(nil)
 
@@ -38,9 +37,114 @@ func NewSSHClient() *SSHClient {
 	return &SSHClient{}
 }
 
+// connect establishes an SSH connection to the project host.
+func (c *SSHClient) connect(project config.Project) (*ssh.Client, error) {
+	// 1. Determine Host, User, Port
+	host := project.Host
+	user := project.User
+	port := project.Port
+
+	// If host contains user@ or :port, parse it
+	if strings.Contains(host, "@") {
+		parts := strings.SplitN(host, "@", 2)
+		if user == "" {
+			user = parts[0]
+		}
+		host = parts[1]
+	}
+	if strings.Contains(host, ":") {
+		parts := strings.SplitN(host, ":", 2)
+		host = parts[0]
+		if port == "" {
+			port = parts[1]
+		}
+	}
+
+	// Defaults
+	if user == "" {
+		user = os.Getenv("USER") // fallback to current user
+	}
+	if port == "" {
+		port = "22"
+	}
+
+	// 2. Prepare Auth Methods
+	authMethods := []ssh.AuthMethod{}
+
+	// Identity File
+	identityFile := project.IdentityFile
+	if identityFile == "" {
+		// Default to ~/.ssh/id_rsa
+		home, err := os.UserHomeDir()
+		if err == nil {
+			identityFile = home + "/.ssh/id_rsa"
+		}
+	} else {
+		// Expand ~ if present
+		if strings.HasPrefix(identityFile, "~/") {
+			home, err := os.UserHomeDir()
+			if err == nil {
+				identityFile = home + identityFile[1:]
+			}
+		}
+	}
+
+	key, err := os.ReadFile(identityFile)
+	if err == nil {
+		signer, err := ssh.ParsePrivateKey(key)
+		if err == nil {
+			authMethods = append(authMethods, ssh.PublicKeys(signer))
+		}
+	}
+
+	// TODO: Add Agent support if needed (requires golang.org/x/crypto/ssh/agent)
+
+	// 3. Host Key Verification
+	// We use ~/.ssh/known_hosts
+	home, err := os.UserHomeDir()
+	var hostKeyCallback ssh.HostKeyCallback
+	if err == nil {
+		knownHostsFile := home + "/.ssh/known_hosts"
+		hostKeyCallback, err = knownhosts.New(knownHostsFile)
+		if err != nil {
+			// Fallback or error? User asked for "safely", but if known_hosts doesn't exist or is unreadable...
+			// We might want to allow InsecureIgnoreHostKey ONLY if explicitly configured, but for now let's be strict
+			// or just warn.
+			// However, knownhosts.New returns error if file doesn't exist usually.
+			// Let's assume strict check for "safely".
+			// If file doesn't exist, create an empty one? No, knownhosts.New handles non-existent file? No.
+			// If it fails, we return error.
+			return nil, fmt.Errorf("failed to load known_hosts: %w", err)
+		}
+	} else {
+		return nil, fmt.Errorf("failed to get user home dir: %w", err)
+	}
+
+	clientConfig := &ssh.ClientConfig{
+		User:            user,
+		Auth:            authMethods,
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         10 * time.Second,
+	}
+
+	addr := net.JoinHostPort(host, port)
+	client, err := ssh.Dial("tcp", addr, clientConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial ssh %s: %w", addr, err)
+	}
+
+	return client, nil
+}
+
 // Deploy connects to the project host and runs the deployment commands.
 func (c *SSHClient) Deploy(project config.Project, output io.Writer) error {
 	fmt.Fprintf(output, "Connecting to %s...\n", project.Host)
+
+	client, err := c.connect(project)
+	if err != nil {
+		return fmt.Errorf("connection failed: %w", err)
+	}
+	defer client.Close()
 
 	commands := []string{
 		fmt.Sprintf("cd %q", project.Path),
@@ -48,19 +152,23 @@ func (c *SSHClient) Deploy(project config.Project, output io.Writer) error {
 		"docker compose pull",
 		"docker compose up -d --build",
 	}
-	// Join commands with && so subsequent commands only run if previous ones succeed
 	remoteCommand := strings.Join(commands, " && ")
 
 	fmt.Fprintf(output, "Running: %s\n", remoteCommand)
 
-	return c.runSSH(project.Host, remoteCommand, output, nil)
+	return c.runSession(client, remoteCommand, output, output, nil)
 }
 
 // StreamLogs streams the logs from the remote project.
 func (c *SSHClient) StreamLogs(ctx context.Context, project config.Project, output io.Writer) error {
 	fmt.Fprintf(output, "Streaming logs from %s...\n", project.Host)
 
-	// Command: cd path && docker compose logs -f
+	client, err := c.connect(project)
+	if err != nil {
+		return fmt.Errorf("connection failed: %w", err)
+	}
+	defer client.Close()
+
 	commands := []string{
 		fmt.Sprintf("cd %q", project.Path),
 		"docker compose logs -f",
@@ -69,12 +177,18 @@ func (c *SSHClient) StreamLogs(ctx context.Context, project config.Project, outp
 
 	fmt.Fprintf(output, "Running: %s\n", remoteCommand)
 
-	return c.runSSH(project.Host, remoteCommand, output, ctx)
+	return c.runSession(client, remoteCommand, output, output, ctx)
 }
 
 // Restart restarts the project containers.
 func (c *SSHClient) Restart(project config.Project, output io.Writer) error {
 	fmt.Fprintf(output, "Restarting project on %s...\n", project.Host)
+
+	client, err := c.connect(project)
+	if err != nil {
+		return fmt.Errorf("connection failed: %w", err)
+	}
+	defer client.Close()
 
 	commands := []string{
 		fmt.Sprintf("cd %q", project.Path),
@@ -84,12 +198,18 @@ func (c *SSHClient) Restart(project config.Project, output io.Writer) error {
 
 	fmt.Fprintf(output, "Running: %s\n", remoteCommand)
 
-	return c.runSSH(project.Host, remoteCommand, output, nil)
+	return c.runSession(client, remoteCommand, output, output, nil)
 }
 
 // Stop stops the project containers.
 func (c *SSHClient) Stop(project config.Project, output io.Writer) error {
 	fmt.Fprintf(output, "Stopping project on %s...\n", project.Host)
+
+	client, err := c.connect(project)
+	if err != nil {
+		return fmt.Errorf("connection failed: %w", err)
+	}
+	defer client.Close()
 
 	commands := []string{
 		fmt.Sprintf("cd %q", project.Path),
@@ -99,35 +219,29 @@ func (c *SSHClient) Stop(project config.Project, output io.Writer) error {
 
 	fmt.Fprintf(output, "Running: %s\n", remoteCommand)
 
-	return c.runSSH(project.Host, remoteCommand, output, nil)
+	return c.runSession(client, remoteCommand, output, output, nil)
 }
 
 // ListServices fetches the list of services for the project.
 func (c *SSHClient) ListServices(project config.Project) ([]string, error) {
+	client, err := c.connect(project)
+	if err != nil {
+		return nil, fmt.Errorf("connection failed: %w", err)
+	}
+	defer client.Close()
+
 	commands := []string{
 		fmt.Sprintf("cd %q", project.Path),
 		"docker compose config --services",
 	}
 	remoteCommand := strings.Join(commands, " && ")
 
-	args := []string{project.Host, remoteCommand}
-	var cmd *exec.Cmd
-
-	if c.CmdRunner != nil {
-		cmd = c.CmdRunner("ssh", args...)
-	} else {
-		cmd = exec.Command("ssh", args...)
+	var b strings.Builder
+	if err := c.runSession(client, remoteCommand, &b, &b, nil); err != nil {
+		return nil, fmt.Errorf("failed to list services: %w", err)
 	}
 
-	// Capture output
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("ssh command failed: %w", err)
-	}
-
-	// Parse output
-	services := strings.Split(strings.TrimSpace(string(output)), "\n")
-	// Filter empty strings
+	services := strings.Split(strings.TrimSpace(b.String()), "\n")
 	var validServices []string
 	for _, s := range services {
 		s = strings.TrimSpace(s)
@@ -141,29 +255,57 @@ func (c *SSHClient) ListServices(project config.Project) ([]string, error) {
 
 // RunShell starts an interactive shell session for the service.
 func (c *SSHClient) RunShell(project config.Project, service string) error {
+	client, err := c.connect(project)
+	if err != nil {
+		return fmt.Errorf("connection failed: %w", err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create session: %w", err)
+	}
+	defer session.Close()
+
 	commands := []string{
 		fmt.Sprintf("cd %q", project.Path),
 		fmt.Sprintf("docker compose exec -it %s /bin/sh", service),
 	}
 	remoteCommand := strings.Join(commands, " && ")
 
-	// Important: ssh -t is needed for pseudo-terminal allocation
-	args := []string{"-t", project.Host, remoteCommand}
+	// Request PTY
+	fd := int(os.Stdin.Fd())
+	if term.IsTerminal(fd) {
+		state, err := term.MakeRaw(fd)
+		if err != nil {
+			return fmt.Errorf("failed to make raw terminal: %w", err)
+		}
+		defer term.Restore(fd, state)
 
-	var cmd *exec.Cmd
-	if c.CmdRunner != nil {
-		cmd = c.CmdRunner("ssh", args...)
-	} else {
-		cmd = exec.Command("ssh", args...)
+		w, h, err := term.GetSize(fd)
+		if err == nil {
+			if err := session.RequestPty("xterm", h, w, ssh.TerminalModes{
+				ssh.ECHO:          1,
+				ssh.TTY_OP_ISPEED: 14400,
+				ssh.TTY_OP_OSPEED: 14400,
+			}); err != nil {
+				return fmt.Errorf("failed to request pty: %w", err)
+			}
+
+			// Handle window resize? (Advanced, skipped for now)
+		}
 	}
 
-	// Connect to standard streams
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	session.Stdin = os.Stdin
+	session.Stdout = os.Stdout
+	session.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ssh shell session ended: %w", err)
+	if err := session.Run(remoteCommand); err != nil {
+		if _, ok := err.(*ssh.ExitError); ok {
+			// Process exited with non-zero status
+			return nil // It's expected when user exits shell
+		}
+		return fmt.Errorf("remote shell error: %w", err)
 	}
 
 	return nil
@@ -171,8 +313,12 @@ func (c *SSHClient) RunShell(project config.Project, service string) error {
 
 // GetStatus returns the status of the project.
 func (c *SSHClient) GetStatus(ctx context.Context, project config.Project) (ProjectStatus, error) {
-	// Command: cd path && (git rev-parse --abbrev-ref HEAD || echo "") && echo "---SPLIT---" && docker compose ps -a --format json
-	// We use || echo "" for git command so it doesn't fail the whole chain if it's not a git repo.
+	client, err := c.connect(project)
+	if err != nil {
+		return ProjectStatus{}, fmt.Errorf("connection failed: %w", err)
+	}
+	defer client.Close()
+
 	commands := []string{
 		fmt.Sprintf("cd %q", project.Path),
 		"(git rev-parse --abbrev-ref HEAD || echo '')",
@@ -181,38 +327,22 @@ func (c *SSHClient) GetStatus(ctx context.Context, project config.Project) (Proj
 	}
 	remoteCommand := strings.Join(commands, " && ")
 
-	args := []string{project.Host, remoteCommand}
-	var cmd *exec.Cmd
-
-	if c.CmdRunner != nil {
-		cmd = c.CmdRunner("ssh", args...)
-	} else {
-		if ctx != nil {
-			cmd = exec.CommandContext(ctx, "ssh", args...)
-		} else {
-			cmd = exec.Command("ssh", args...)
-		}
+	var b strings.Builder
+	if err := c.runSession(client, remoteCommand, &b, &b, ctx); err != nil {
+		return ProjectStatus{}, fmt.Errorf("failed to get status: %w", err)
 	}
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return ProjectStatus{}, fmt.Errorf("ssh command failed: %w (output: %s)", err, string(output))
-	}
-
-	// Parse output
-	parts := strings.Split(string(output), "---SPLIT---")
+	output := b.String()
+	parts := strings.Split(output, "---SPLIT---")
 	if len(parts) < 2 {
-		return ProjectStatus{}, fmt.Errorf("unexpected output format")
+		return ProjectStatus{}, fmt.Errorf("unexpected output format: %s", output)
 	}
 
 	branch := strings.TrimSpace(parts[0])
 	jsonOutput := strings.TrimSpace(parts[1])
 
 	var containers []ContainerStatus
-	// docker compose ps --format json returns a JSON array or stream of objects depending on version.
-	// We'll try to unmarshal as array first.
 	if err := json.Unmarshal([]byte(jsonOutput), &containers); err != nil {
-		// If unmarshal fails, it might be line-delimited JSON objects
 		lines := strings.Split(jsonOutput, "\n")
 		for _, line := range lines {
 			if strings.TrimSpace(line) == "" {
@@ -225,7 +355,6 @@ func (c *SSHClient) GetStatus(ctx context.Context, project config.Project) (Proj
 		}
 	}
 
-	// Calculate aggregated status
 	status := "Down"
 	runningCount := 0
 	if len(containers) > 0 {
@@ -241,13 +370,8 @@ func (c *SSHClient) GetStatus(ctx context.Context, project config.Project) (Proj
 		}
 	}
 
-	// Calculate LastDeployedAt
 	var lastDeployed time.Time
 	for _, c := range containers {
-		// CreatedAt format: "2021-08-06 14:00:00 +0000 UTC"
-		// or "2021-08-06T14:00:00Z"
-		// We try to parse it.
-		// Common docker format: "2006-01-02 15:04:05 -0700 MST"
 		t, err := parseDockerTime(c.CreatedAt)
 		if err == nil {
 			if t.After(lastDeployed) {
@@ -265,12 +389,44 @@ func (c *SSHClient) GetStatus(ctx context.Context, project config.Project) (Proj
 	}, nil
 }
 
+func (c *SSHClient) runSession(client *ssh.Client, cmd string, stdout, stderr io.Writer, ctx context.Context) error {
+	session, err := client.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create session: %w", err)
+	}
+	defer session.Close()
+
+	session.Stdout = stdout
+	session.Stderr = stderr
+
+	if err := session.Start(cmd); err != nil {
+		return fmt.Errorf("failed to start command: %w", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		// Attempt to send signal or close session
+		// session.Signal(ssh.SIGINT) or just close
+		// Closing session usually kills the remote command if pty is not allocated,
+		// but here we didn't allocate pty for batch commands.
+		// We'll return nil if cancelled intentionally? Or ctx error.
+		// The caller (StreamLogs) expects to return when ctx is done.
+		return ctx.Err()
+	}
+}
+
 func parseDockerTime(s string) (time.Time, error) {
-	// Try different layouts
 	layouts := []string{
 		"2006-01-02 15:04:05 -0700 MST",
 		"2006-01-02 15:04:05 +0000 UTC",
-        time.RFC3339,
+		time.RFC3339,
 	}
 	for _, layout := range layouts {
 		if t, err := time.Parse(layout, s); err == nil {
@@ -278,39 +434,4 @@ func parseDockerTime(s string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, fmt.Errorf("unable to parse time: %s", s)
-}
-
-// runSSH executes a remote command via SSH.
-func (c *SSHClient) runSSH(host, remoteCommand string, output io.Writer, ctx context.Context) error {
-	args := []string{host, remoteCommand}
-
-	var cmd *exec.Cmd
-	if c.CmdRunner != nil {
-		// Mock path
-		cmd = c.CmdRunner("ssh", args...)
-
-		// If context is provided, we need to handle it.
-		// Since we can't easily attach context to a mock command created by CmdRunner (which returns *Cmd),
-		// we rely on the caller to not care about cancellation in tests OR we wrap it.
-		// For now, in real usage, we use exec.CommandContext.
-	} else {
-		if ctx != nil {
-			cmd = exec.CommandContext(ctx, "ssh", args...)
-		} else {
-			cmd = exec.Command("ssh", args...)
-		}
-	}
-
-	cmd.Stdout = output
-	cmd.Stderr = output
-
-	if err := cmd.Run(); err != nil {
-		// If cancelled, it might return error
-		if ctx != nil && ctx.Err() == context.Canceled {
-			return nil // Stopped explicitly
-		}
-		return fmt.Errorf("ssh command failed: %w", err)
-	}
-
-	return nil
 }

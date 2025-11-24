@@ -42,4 +42,4 @@ __debug_bin
 .env.local
 
 # the postAttachCommand should clean this up, ensure it's not commited anyway
-.gitconfig.global
+.gitconfig.globalgoploy-tui
