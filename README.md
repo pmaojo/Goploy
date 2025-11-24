@@ -1,146 +1,210 @@
-## 🌟 About
+## 🌟 About Goploy
 
-**Goploy TUI** is your command-line companion for effortless, self-hosted application deployment and management. Designed for developers who love the terminal, it provides a powerful yet intuitive Text User Interface (TUI) to interact with your remote projects.
+Goploy is a powerful yet minimalist self-hosted deployment manager designed for developers who value control and simplicity. It offers a dual interface: a rich Terminal User Interface (TUI) for interactive management and a robust HTTP API for programmatic control. Seamlessly manage your remote Docker Compose projects, trigger deployments, monitor logs, and control containers with ease.
 
-Say goodbye to manual SSH commands and scattered scripts. With Goploy TUI, you can define your projects in a simple YAML file and then deploy, monitor, and control your applications with just a few keystrokes, all from a single, responsive interface. It's built for speed, efficiency, and a seamless developer experience.
+## ✨ Key Features
 
-## ✨ Features
+### 💻 Terminal User Interface (TUI)
+*   **Intuitive Project Definition**: Configure all your projects using a simple `goploy.yaml` file.
+*   **Interactive Navigation**: Effortlessly browse and select projects with keyboard shortcuts.
+*   **One-Click Deployment**: Trigger `git pull` and `docker compose up -d` on remote hosts with a single key press.
+*   **Real-time Logging**: Stream live deployment output and container logs directly in the terminal.
+*   **Container Control**: Perform essential actions like Restart, Stop, and Shell into your containers.
+*   **Status Monitoring**: Get a live view of container health, status, and metadata.
 
-*   📋 **Configuration as Code:** Define projects and their deployment parameters using a straightforward YAML file (`goploy.yaml`).
-*   🚀 **Intuitive TUI Navigation:** Effortlessly browse and select your projects with full keyboard control.
-*   ✨ **One-Click Deployments:** Trigger `git pull` and `docker compose pull/up` on remote hosts with a single key press.
-*   📜 **Real-time Deployment Logs:** Monitor every step of your deployment process with live streaming output directly in the TUI.
-*   👁️‍🗨️ **Live Application Monitoring:** Stream `docker compose logs -f` for any project to keep an eye on your running applications.
-*   ⚙️ **Basic Container Control:** Quickly restart, stop, and access container shells via convenient keyboard shortcuts.
-*   📊 **Status & Metadata Display:** Get immediate insights into the health and essential metadata of your Docker containers.
-*   🔒 **Secure Remote Execution:** All remote commands are executed securely via SSH.
-*   🚨 **Error Reporting:** Receive clear, actionable failure notifications within the TUI when things go wrong.
+### 🌐 HTTP API
+*   **Programmatic Control**: Integrate Goploy into your CI/CD pipelines or custom tools via HTTP endpoints.
+*   **Trigger Deployments**: Deploy specific git references (branches, tags, or commits) remotely.
+*   **Stream Logs**: Consume live deployment and container logs over HTTP for real-time feedback.
+*   **Secure Access**: All API interactions are protected by API Key authentication.
 
-## 🏗️ Architecture & Tech Stack
+### 📧 Notifications
+*   **Email Alerts**: Automatically receive deployment status notifications (Success/Failure) for critical updates.
 
-Goploy TUI is engineered for robustness and performance, leveraging battle-tested open-source technologies:
+## 🚀 Architecture & Tech Stack
 
-*   **Core Language:** Built entirely in **Go (Golang)** for speed, concurrency, and static compilation.
-*   **TUI Framework:** Utilizes [`github.com/rivo/tview`](https://github.com/rivo/tview) to create a rich and interactive terminal user interface.
-*   **Orchestration:** Manages application services via **Docker Compose**, allowing for multi-container application deployments.
-*   **Remote Protocol:** Securely communicates with remote hosts using `golang.org/x/crypto/ssh`.
-*   **Project Structure:** Follows a clean, modular architecture inspired by `allaboutapps/go-starter`, with distinct `cmd/server` and `cmd/tui` components.
+Goploy is built with performance and simplicity in mind, leveraging the following technologies:
 
-## ⚡ Performance
+*   **Go (Golang)**: The core language for its concurrency, performance, and ability to compile to a single static binary.
+*   **Tview**: Powers the interactive and responsive Terminal User Interface.
+*   **Echo**: A high-performance, minimalist Go web framework for the HTTP API.
+*   **Docker Compose**: The standard for defining and running multi-container Docker applications, managed remotely by Goploy.
+*   **SSH**: Securely executes commands on remote servers, enabling seamless deployments and container management.
 
-Goploy TUI is designed with performance and resource efficiency in mind:
+## ⚡ Performance Highlights
 
-*   **Blazing Fast Startup:** Initializes in **under 500ms**, getting you to your projects instantly.
-*   **Minimal Resource Footprint:** Operates with a **low memory footprint (< 30MB idle)**, perfect for resource-constrained environments.
-*   **Highly Responsive UI:** Ensures a smooth and interactive user experience, even during intensive background tasks.
-*   **Single, Statically Compiled Binary:** Easy distribution and deployment—just one file to copy!
+Goploy is engineered for efficiency, making it ideal for resource-constrained environments:
 
-## 🚀 Installation & Usage
+*   **Blazing Fast Startup**: Initializes in less than **500ms**, getting you up and running instantly.
+*   **Minimal Resource Utilization**: Maintains a low memory footprint of less than **30MB idle**, ensuring your server resources are free for your applications.
 
-Getting started with Goploy TUI is simple.
+## 🛠️ Installation & Usage
 
 ### Prerequisites
 
-*   Go 1.21+ installed
-*   Docker & Docker Compose installed on your remote deployment hosts.
-*   SSH access configured for your remote hosts.
+Before you begin, ensure you have:
+*   [Go (1.21+)](https://golang.org/doc/install) installed.
+*   Docker and Docker Compose installed on your remote deployment targets.
+*   SSH access to your remote servers with appropriate keys configured.
 
-### Install
+### Install Goploy
 
-You can install Goploy TUI directly using `go install`:
+You can install Goploy directly using `go install`:
 
 ```bash
-go install github.com/your-org/goploy-tui@latest
+go install github.com/your-org/goploy@latest # Replace 'your-org' with the actual GitHub organization/user
 ```
 
-This will download and compile the `goploy-tui` binary and place it in your `$GOPATH/bin` directory (ensure this is in your system's PATH).
+This will place the `goploy` executable in your `$GOPATH/bin` directory.
 
 ### Configuration
 
-Create a `goploy.yaml` file in your current directory or specify its path. This file defines the projects Goploy TUI will manage.
+Create a `goploy.yaml` file in your working directory (or specify its path with `GOPLOY_CONFIG_PATH` environment variable). See the [Configuration](#-configuration) section for details.
 
-```yaml
-# goploy.yaml
-projects:
-  - name: MyWebApp
-    host: user@your-server-ip:22
-    path: /var/www/mywebapp
-    repo: git@github.com:your-org/mywebapp.git
-    branch: main
-    compose_file: docker-compose.prod.yaml # Optional, defaults to docker-compose.yaml
-  - name: AnotherService
-    host: deployer@another-server.com
-    path: /opt/services/anotherservice
-    repo: https://github.com/your-org/anotherservice.git
-```
+### Running the TUI
 
-### Run
-
-Navigate to the directory containing your `goploy.yaml` and run:
+To launch the interactive Terminal User Interface:
 
 ```bash
-goploy-tui
+goploy tui
 ```
 
-Or, specify the config file explicitly:
+### Running the HTTP API Server
+
+To start the HTTP API server, you must provide the `GOPLOY_API_KEY` environment variable. Configure mailer settings if you want email notifications.
 
 ```bash
-goploy-tui --config /path/to/your/goploy.yaml
-```
+export GOPLOY_API_KEY="your-super-secret-api-key-here"
+export SERVER_ECHO_LISTEN_ADDRESS=":8080" # Optional, default is :8080
 
-The TUI will launch, displaying your configured projects. Use arrow keys to navigate and follow the on-screen prompts for deployment and control actions.
+# --- Optional: Configure SMTP for email notifications ---
+export SERVER_MAILER_TRANSPORTER="smtp" # Use "mock" for testing
+export SERVER_SMTP_HOST="smtp.mailtrap.io"
+export SERVER_SMTP_PORT="2525"
+export SERVER_SMTP_USERNAME="your-smtp-username"
+export SERVER_SMTP_PASSWORD="your-smtp-password"
+# --------------------------------------------------------
+
+goploy server
+```
 
 ## ⚙️ Configuration
 
-The `goploy.yaml` file is the heart of Goploy TUI, allowing you to define multiple projects.
+### `goploy.yaml`
+
+Define your projects, their remote hosts, repositories, and notification preferences in a `goploy.yaml` file:
 
 ```yaml
 projects:
-  - name: <string> # Unique name for your project
-    host: <string> # SSH connection string (e.g., "user@ip:port")
-    path: <string> # Absolute path to the project root directory on the remote host
-    repo: <string> # Git repository URL (e.g., "git@github.com:user/repo.git" or "https://github.com/user/repo.git")
-    branch: <string, optional> # Git branch to deploy (defaults to "main")
-    compose_file: <string, optional> # Name of the Docker Compose file (defaults to "docker-compose.yaml")
+  - name: "Marketing Site"
+    host: "deploy@192.168.1.10:22"
+    path: "/var/www/marketing"
+    repo: "git@github.com:company/marketing.git"
+    identity_file: "~/.ssh/id_rsa" # Optional: specify SSH key
+    notify_emails:
+      - "devops@company.com"
+      - "lead@company.com"
+  - name: "Backend API"
+    host: "admin@api.production.com"
+    path: "/opt/services/backend"
+    repo: "https://github.com/company/backend.git"
+    # identity_file is optional; if omitted, SSH agent or default keys are used.
 ```
 
-**Example:**
+### Environment Variables
 
-```yaml
-projects:
-  - name: API Gateway
-    host: deploy@192.168.1.100
-    path: /srv/api-gateway
-    repo: https://github.com/myorg/api-gateway.git
-    branch: develop
-    compose_file: docker-compose.dev.yaml
-  - name: Frontend App
-    host: deploy@frontend-server.com:2222
-    path: /var/www/frontend
-    repo: git@github.com:myorg/frontend-app.git
+Configure the server, API authentication, and email settings using environment variables:
+
+| Variable                          | Description                                                                                                                              | Default Value |
+| :-------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- | :------------ |
+| `GOPLOY_API_KEY`                  | **Required**. The Bearer token used for authenticating API requests.                                                                     |               |
+| `GOPLOY_CONFIG_PATH`              | Path to the `goploy.yaml` configuration file.                                                                                            | `./goploy.yaml` |
+| `SERVER_ECHO_LISTEN_ADDRESS`      | The address and port for the HTTP API server to listen on.                                                                               | `:8080`       |
+| `SERVER_MAILER_TRANSPORTER`       | Mail transport to use (`smtp` for real emails, `mock` for development/testing without sending).                                          | `mock`        |
+| `SERVER_SMTP_HOST`                | SMTP host for sending emails (e.g., `smtp.gmail.com`). Required if `SERVER_MAILER_TRANSPORTER` is `smtp`.                                |               |
+| `SERVER_SMTP_PORT`                | SMTP port (e.g., `587` for TLS, `465` for SSL). Required if `SERVER_MAILER_TRANSPORTER` is `smtp`.                                      |               |
+| `SERVER_SMTP_USERNAME`            | SMTP username for authentication. Required if `SERVER_MAILER_TRANSPORTER` is `smtp`.                                                     |               |
+| `SERVER_SMTP_PASSWORD`            | SMTP password for authentication. Required if `SERVER_MAILER_TRANSPORTER` is `smtp`.                                                     |               |
+
+## 🌐 HTTP API Usage
+
+All API requests must include the `Authorization` header with your `GOPLOY_API_KEY` as a Bearer token.
+
+`Authorization: Bearer <GOPLOY_API_KEY>`
+
+Assume the server is running on `http://localhost:8080` and `GOPLOY_API_KEY` is set to `$GOPLOY_API_KEY`.
+
+### List Projects
+
+`GET /api/v1/projects`
+Returns a list of all configured projects.
+
+```bash
+curl -H "Authorization: Bearer $GOPLOY_API_KEY" http://localhost:8080/api/v1/projects
+```
+
+### Get Project Status
+
+`GET /api/v1/projects/:name/status`
+Returns the current status, active branch, and container health of a specific project.
+*(Note: Project names with spaces should be URL-encoded)*
+
+```bash
+curl -H "Authorization: Bearer $GOPLOY_API_KEY" http://localhost:8080/api/v1/projects/Marketing%20Site/status
+```
+
+### Trigger Deployment
+
+`POST /api/v1/projects/:name/deploy`
+Triggers a deployment for the specified project. You can optionally provide a `ref` (branch, tag, or commit hash) in the request body. The response is streamed as plain text logs.
+
+```bash
+# Deploy 'main' branch
+curl -X POST \
+     -H "Authorization: Bearer $GOPLOY_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"ref": "main"}' \
+     http://localhost:8080/api/v1/projects/Marketing%20Site/deploy
+
+# Deploy default branch (as configured in goploy.yaml or repo)
+curl -X POST \
+     -H "Authorization: Bearer $GOPLOY_API_KEY" \
+     http://localhost:8080/api/v1/projects/Backend%20API/deploy
+```
+
+### Stream Logs
+
+`GET /api/v1/projects/:name/logs`
+Streams the live `docker compose logs -f` output for the project's containers.
+
+```bash
+curl -H "Authorization: Bearer $GOPLOY_API_KEY" http://localhost:8080/api/v1/projects/Marketing%20Site/logs
 ```
 
 ## 🗺️ Roadmap
 
-Here's an overview of the current and planned features for Goploy TUI:
+Goploy is continuously evolving. Here's a look at the current and planned features:
 
 ### Functional Requirements (FR)
 
-*   [ ] FR1: Project Definition (YAML): Parse user-defined configuration (e.g., `goploy.yaml`) specifying projects (Name, Host, Path, Repo).
-*   [ ] FR2: Main TUI Navigation: Interactive list of projects with keyboard navigation.
-*   [ ] FR3: Interactive Deployment Workflow: Trigger deployment (git pull, docker compose pull/up) via key press.
-*   [ ] FR4: Real-time Logging (Deployment): Stream output of remote commands to a log panel.
-*   [ ] FR5: Real-time Logging (Monitoring): Stream application logs (`docker compose logs -f`) to a log panel.
-*   [ ] FR6: Basic Container Control: Restart, Stop, and Shell Access via shortcuts.
-*   [ ] FR7: Status and Metadata Display: Monitor container status and metadata.
-*   [ ] FR8: Remote Secure Execution: Execute commands via SSH.
-*   [ ] FR9: Error Reporting: Report failures in the TUI.
+*   [x] **FR1: Project Definition (YAML)**: Parse user-defined configuration (e.g., `goploy.yaml`) specifying projects.
+*   [x] **FR2: Main TUI Navigation**: Interactive list of projects with keyboard navigation.
+*   [x] **FR3: Interactive Deployment Workflow**: Trigger deployment via key press.
+*   [x] **FR4: Real-time Logging (Deployment)**: Stream output of remote commands to a log panel.
+*   [x] **FR5: Real-time Logging (Monitoring)**: Stream application logs (`docker compose logs -f`) to a log panel.
+*   [x] **FR6: Basic Container Control**: Restart, Stop, and Shell Access via shortcuts.
+*   [x] **FR7: Status and Metadata Display**: Monitor container status and metadata.
+*   [x] **FR8: Remote Secure Execution**: Execute commands via SSH.
+*   [ ] **FR9: Error Reporting**: Report failures in the TUI.
+*   [x] **FR10: HTTP API**: Control deployments via REST API.
+*   [x] **FR11: Notifications**: Email alerts for deployment status.
 
 ### Non-Functional Requirements (NFR)
 
-*   [ ] NFR1: Performance (Startup): Fast initialization (< 500ms).
-*   [ ] NFR2: Resource Utilization: Low memory footprint (< 30MB idle).
-*   [ ] NFR3: Concurrency and Responsiveness: Responsive UI during background tasks.
-*   [ ] NFR4: Distribution: Single statically compiled binary.
-*   [ ] NFR5: Keyboard Usability: Full keyboard control.
+*   [x] **NFR1: Performance (Startup)**: Fast initialization (< 500ms).
+*   [x] **NFR2: Resource Utilization**: Low memory footprint (< 30MB idle).
+*   [ ] **NFR3: Concurrency and Responsiveness**: Responsive UI during background tasks.
+*   [ ] **NFR4: Distribution**: Single statically compiled binary.
+*   [ ] **NFR5: Keyboard Usability**: Full keyboard control.
 
+---
