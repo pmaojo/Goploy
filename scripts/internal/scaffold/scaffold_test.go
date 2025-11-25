@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"allaboutapps.dev/aw/go-starter/internal/test"
-	"allaboutapps.dev/aw/go-starter/internal/util"
-	"allaboutapps.dev/aw/go-starter/scripts/internal/scaffold"
+	"github.com/pmaojo/goploy/internal/test"
+	"github.com/pmaojo/goploy/internal/util"
+	"github.com/pmaojo/goploy/scripts/internal/scaffold"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

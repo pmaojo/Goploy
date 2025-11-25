@@ -3,7 +3,7 @@ package config_test
 import (
 	"testing"
 
-	"allaboutapps.dev/aw/go-starter/internal/config"
+	"github.com/pmaojo/goploy/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

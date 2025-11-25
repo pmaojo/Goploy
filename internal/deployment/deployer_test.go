@@ -58,7 +58,7 @@ func TestSSHClient_ImplementsController(t *testing.T) {
 
 func TestSSHClient_Structure(t *testing.T) {
 	// Just to ensure we didn't break the struct definition
-	c := NewSSHClient()
+	c := NewSSHClient(nil)
 	assert.NotNil(t, c)
 }
 

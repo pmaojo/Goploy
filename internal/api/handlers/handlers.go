@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"allaboutapps.dev/aw/go-starter/internal/api"
-	"allaboutapps.dev/aw/go-starter/internal/api/handlers/common"
-	"allaboutapps.dev/aw/go-starter/internal/api/handlers/projects"
+	"github.com/pmaojo/goploy/internal/api"
+	"github.com/pmaojo/goploy/internal/api/handlers/common"
+	"github.com/pmaojo/goploy/internal/api/handlers/projects"
 )
 
 func AttachAllRoutes(s *api.Server) {

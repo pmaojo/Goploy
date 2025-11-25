@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"allaboutapps.dev/aw/go-starter/internal/api"
-	"allaboutapps.dev/aw/go-starter/internal/api/handlers/projects"
-	"allaboutapps.dev/aw/go-starter/internal/config"
-	"allaboutapps.dev/aw/go-starter/internal/deployment"
+	"github.com/pmaojo/goploy/internal/api"
+	"github.com/pmaojo/goploy/internal/api/handlers/projects"
+	"github.com/pmaojo/goploy/internal/config"
+	"github.com/pmaojo/goploy/internal/deployment"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 )
