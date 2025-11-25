@@ -9,8 +9,8 @@ import (
 	"time"
 	// "io" // Removed unused import
 	"github.com/rivo/tview"
-    "allaboutapps.dev/aw/go-starter/internal/config"
-	"allaboutapps.dev/aw/go-starter/internal/deployment"
+    "github.com/pmaojo/goploy/internal/config"
+	"github.com/pmaojo/goploy/internal/deployment"
 )
 
 type App struct {

@@ -2,7 +2,7 @@
 
 package main
 
-import "allaboutapps.dev/aw/go-starter/scripts/cmd"
+import "github.com/pmaojo/goploy/scripts/cmd"
 
 func main() {
 	cmd.Execute()

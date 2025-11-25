@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"allaboutapps.dev/aw/go-starter/cmd/env"
-	"allaboutapps.dev/aw/go-starter/cmd/server"
-	"allaboutapps.dev/aw/go-starter/internal/config"
+	"github.com/pmaojo/goploy/cmd/env"
+	"github.com/pmaojo/goploy/cmd/server"
+	"github.com/pmaojo/goploy/internal/config"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )

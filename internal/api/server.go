@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"allaboutapps.dev/aw/go-starter/internal/config"
-	"allaboutapps.dev/aw/go-starter/internal/deployment"
-	"allaboutapps.dev/aw/go-starter/internal/mailer"
-	"allaboutapps.dev/aw/go-starter/internal/util"
+	"github.com/pmaojo/goploy/internal/config"
+	"github.com/pmaojo/goploy/internal/deployment"
+	"github.com/pmaojo/goploy/internal/mailer"
+	"github.com/pmaojo/goploy/internal/util"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
 )
