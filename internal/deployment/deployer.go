@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"allaboutapps.dev/aw/go-starter/internal/config"
-	"allaboutapps.dev/aw/go-starter/internal/mailer"
+	"github.com/pmaojo/goploy/internal/config"
+	"github.com/pmaojo/goploy/internal/mailer"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/term"

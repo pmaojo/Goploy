@@ -3,7 +3,7 @@ package tui
 import (
 	"fmt"
 	"github.com/rivo/tview"
-	"allaboutapps.dev/aw/go-starter/internal/config"
+	"github.com/pmaojo/goploy/internal/config"
     "github.com/gdamore/tcell/v2"
 )
 

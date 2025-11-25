@@ -1,17 +1,22 @@
 package mime_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
-	"allaboutapps.dev/aw/go-starter/internal/util"
-	"allaboutapps.dev/aw/go-starter/internal/util/mime"
+	"github.com/pmaojo/goploy/internal/util"
+	"github.com/pmaojo/goploy/internal/util/mime"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestKnownMIME(t *testing.T) {
+	wd, _ := os.Getwd()
+	// internal/util/mime -> root is ../../..
+	os.Setenv("PROJECT_ROOT_DIR", filepath.Join(wd, "../../.."))
+
 	filePath := filepath.Join(util.GetProjectRootDir(), "test", "testdata", "example.jpg")
 
 	var detectedMIME mime.MIME

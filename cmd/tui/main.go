@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"allaboutapps.dev/aw/go-starter/internal/config"
-	"allaboutapps.dev/aw/go-starter/internal/tui"
+	"github.com/pmaojo/goploy/internal/config"
+	"github.com/pmaojo/goploy/internal/tui"
 )
 
 func main() {

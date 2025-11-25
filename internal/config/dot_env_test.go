@@ -5,12 +5,20 @@ import (
 	"path/filepath"
 	"testing"
 
-	"allaboutapps.dev/aw/go-starter/internal/config"
-	"allaboutapps.dev/aw/go-starter/internal/util"
+	"github.com/pmaojo/goploy/internal/config"
+	"github.com/pmaojo/goploy/internal/util"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestDotEnvOverride(t *testing.T) {
+	wd, _ := os.Getwd()
+	// internal/config -> root is ../..
+	os.Setenv("PROJECT_ROOT_DIR", filepath.Join(wd, "../.."))
+	// The util.GetProjectRootDir uses sync.Once, so we can't easily reset it if it was already called.
+	// However, go test runs each package in a separate process (usually).
+	// But if parallel tests run, it might be tricky.
+	// Let's hope sync.Once hasn't triggered yet.
+
 	assert.Empty(t, os.Getenv("IS_THIS_A_TEST_ENV"))
 
 	orgPsqlUser := os.Getenv("PSQL_USER")
@@ -34,6 +42,9 @@ func TestDotEnvOverride(t *testing.T) {
 }
 
 func TestNoopEnvNotFound(t *testing.T) {
+	wd, _ := os.Getwd()
+	os.Setenv("PROJECT_ROOT_DIR", filepath.Join(wd, "../.."))
+
 	assert.NotPanics(t, assert.PanicTestFunc(func() {
 		config.DotEnvTryLoad(
 			filepath.Join(util.GetProjectRootDir(), "/internal/config/testdata/.env.does.not.exist"),
@@ -43,6 +54,9 @@ func TestNoopEnvNotFound(t *testing.T) {
 }
 
 func TestEmptyEnv(t *testing.T) {
+	wd, _ := os.Getwd()
+	os.Setenv("PROJECT_ROOT_DIR", filepath.Join(wd, "../.."))
+
 	assert.NotPanics(t, assert.PanicTestFunc(func() {
 		config.DotEnvTryLoad(
 			filepath.Join(util.GetProjectRootDir(), "/internal/config/testdata/.env.local.sample"),
@@ -54,6 +68,9 @@ func TestEmptyEnv(t *testing.T) {
 }
 
 func TestPanicsOnEnvMalform(t *testing.T) {
+	wd, _ := os.Getwd()
+	os.Setenv("PROJECT_ROOT_DIR", filepath.Join(wd, "../.."))
+
 	assert.Panics(t, assert.PanicTestFunc(func() {
 		config.DotEnvTryLoad(
 			filepath.Join(util.GetProjectRootDir(), "/internal/config/testdata/.env.local.malformed"),

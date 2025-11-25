@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"allaboutapps.dev/aw/go-starter/internal/mailer/transport"
-	"allaboutapps.dev/aw/go-starter/internal/util"
+	"github.com/pmaojo/goploy/internal/mailer/transport"
+	"github.com/pmaojo/goploy/internal/util"
 	"github.com/rs/zerolog"
 )
 

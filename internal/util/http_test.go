@@ -11,12 +11,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"allaboutapps.dev/aw/go-starter/internal/api"
-	"allaboutapps.dev/aw/go-starter/internal/api/httperrors"
-	"allaboutapps.dev/aw/go-starter/internal/test"
-	"allaboutapps.dev/aw/go-starter/internal/types"
-	"allaboutapps.dev/aw/go-starter/internal/types/auth"
-	"allaboutapps.dev/aw/go-starter/internal/util"
+	"github.com/pmaojo/goploy/internal/api/httperrors"
+	"github.com/pmaojo/goploy/internal/test"
+	"github.com/pmaojo/goploy/internal/types"
+	"github.com/pmaojo/goploy/internal/types/auth"
+	"github.com/pmaojo/goploy/internal/util"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/strfmt/conv"
@@ -53,11 +52,7 @@ func TestBindAndValidateSuccess(t *testing.T) {
 		"refresh_token": testToken,
 	}
 
-	s := &api.Server{
-		Echo: e,
-	}
-
-	res := test.PerformRequest(t, s, "POST", "/?test=true", testBody, nil)
+	res := test.PerformRequest(t, e, "POST", "/?test=true", testBody, nil)
 
 	require.Equal(t, http.StatusOK, res.Result().StatusCode)
 
@@ -83,14 +78,15 @@ func TestBindAndValidateBadRequest(t *testing.T) {
 		"refresh_token": testToken,
 	}
 
-	s := &api.Server{
-		Echo: e,
-	}
-
-	_ = test.PerformRequest(t, s, "POST", "/?test=true", testBody, nil)
+	_ = test.PerformRequest(t, e, "POST", "/?test=true", testBody, nil)
 }
 
 func TestParseFileUplaod(t *testing.T) {
+	wd, _ := os.Getwd()
+	// internal/util -> root is ../..
+	os.Setenv("PROJECT_ROOT_DIR", filepath.Join(wd, "../.."))
+	defer os.Unsetenv("PROJECT_ROOT_DIR")
+
 	originalDocumentPath := filepath.Join(util.GetProjectRootDir(), "test", "testdata", "example.jpg")
 	body, contentType := prepareFileUpload(t, originalDocumentPath)
 
@@ -105,19 +101,19 @@ func TestParseFileUplaod(t *testing.T) {
 		return c.NoContent(204)
 	})
 
-	s := &api.Server{
-		Echo: e,
-	}
-
 	headers := http.Header{}
 	headers.Set(echo.HeaderContentType, contentType)
 
-	res := test.PerformRequestWithRawBody(t, s, "POST", "/", body, headers, nil)
+	res := test.PerformRequestWithRawBody(t, e, "POST", "/", body, headers, nil)
 
 	require.Equal(t, http.StatusNoContent, res.Result().StatusCode)
 }
 
 func TestParseFileUplaodUnsupported(t *testing.T) {
+	wd, _ := os.Getwd()
+	os.Setenv("PROJECT_ROOT_DIR", filepath.Join(wd, "../.."))
+	defer os.Unsetenv("PROJECT_ROOT_DIR")
+
 	originalDocumentPath := filepath.Join(util.GetProjectRootDir(), "test", "testdata", "example.jpg")
 	body, contentType := prepareFileUpload(t, originalDocumentPath)
 
@@ -134,14 +130,10 @@ func TestParseFileUplaodUnsupported(t *testing.T) {
 		return c.NoContent(204)
 	})
 
-	s := &api.Server{
-		Echo: e,
-	}
-
 	headers := http.Header{}
 	headers.Set(echo.HeaderContentType, contentType)
 
-	res := test.PerformRequestWithRawBody(t, s, "POST", "/", body, headers, nil)
+	res := test.PerformRequestWithRawBody(t, e, "POST", "/", body, headers, nil)
 	require.Equal(t, http.StatusUnsupportedMediaType, res.Result().StatusCode)
 }
 
@@ -169,14 +161,10 @@ func TestParseFileUplaodEmpty(t *testing.T) {
 		return c.NoContent(204)
 	})
 
-	s := &api.Server{
-		Echo: e,
-	}
-
 	headers := http.Header{}
 	headers.Set(echo.HeaderContentType, writer.FormDataContentType())
 
-	test.PerformRequestWithRawBody(t, s, "POST", "/", &body, headers, nil)
+	test.PerformRequestWithRawBody(t, e, "POST", "/", &body, headers, nil)
 }
 
 func prepareFileUpload(t *testing.T, filePath string) (*bytes.Buffer, string) {
@@ -202,6 +190,10 @@ func prepareFileUpload(t *testing.T, filePath string) (*bytes.Buffer, string) {
 }
 
 func TestStreamFile(t *testing.T) {
+	wd, _ := os.Getwd()
+	os.Setenv("PROJECT_ROOT_DIR", filepath.Join(wd, "../.."))
+	defer os.Unsetenv("PROJECT_ROOT_DIR")
+
 	filename := "file_with_special_characters_🎉_س_.vcf"
 
 	e := echo.New()
@@ -217,9 +209,7 @@ func TestStreamFile(t *testing.T) {
 		return util.StreamFile(c, http.StatusOK, mediaType.String(), filename, file)
 	})
 
-	s := &api.Server{Echo: e}
-
-	res := test.PerformRequest(t, s, "GET", "/files", nil, nil)
+	res := test.PerformRequest(t, e, "GET", "/files", nil, nil)
 	require.Equal(t, http.StatusOK, res.Result().StatusCode)
 
 	mediaType, params, err := mime.ParseMediaType(res.Header().Get(echo.HeaderContentDisposition))

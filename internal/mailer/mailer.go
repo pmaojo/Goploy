@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"allaboutapps.dev/aw/go-starter/internal/config"
-	"allaboutapps.dev/aw/go-starter/internal/mailer/transport"
+	"github.com/pmaojo/goploy/internal/config"
+	"github.com/pmaojo/goploy/internal/mailer/transport"
 	"github.com/jordan-wright/email"
 	"github.com/rs/zerolog/log"
 )
