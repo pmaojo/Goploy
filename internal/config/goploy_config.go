@@ -13,14 +13,23 @@ type GoployConfig struct {
 
 // Project represents a single project configuration.
 type Project struct {
-	Name         string   `yaml:"name"`
-	Host         string   `yaml:"host"`
-	User         string   `yaml:"user"`
-	Port         string   `yaml:"port"`
-	IdentityFile string   `yaml:"identity_file"`
-	Path         string   `yaml:"path"`
-	Repo         string   `yaml:"repo"`
-	NotifyEmails []string `yaml:"notify_emails"`
+	Name         string       `yaml:"name"`
+	Host         string       `yaml:"host"`
+	User         string       `yaml:"user"`
+	Port         string       `yaml:"port"`
+	IdentityFile string       `yaml:"identity_file"`
+	Path         string       `yaml:"path"`
+	Repo         string       `yaml:"repo"`
+	NotifyEmails []string     `yaml:"notify_emails"`
+	Caddy        *CaddyConfig `yaml:"caddy"`
+}
+
+type CaddyConfig struct {
+	AdminURL string   `yaml:"admin_url"`
+	Server   string   `yaml:"server"`
+	Upstream string   `yaml:"upstream"`
+	Email    string   `yaml:"email"`
+	Domains  []string `yaml:"domains"`
 }
 
 // ParseGoployConfig parses the provided YAML data into a GoployConfig struct.

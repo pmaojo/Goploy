@@ -7,20 +7,23 @@ import (
 	"strings"
 	"sync"
 	"time"
-	// "io" // Removed unused import
+
 	"github.com/rivo/tview"
-    "github.com/pmaojo/goploy/internal/config"
+
+	"github.com/pmaojo/goploy/internal/caddy"
+	"github.com/pmaojo/goploy/internal/config"
 	"github.com/pmaojo/goploy/internal/deployment"
 )
 
 type App struct {
-	TviewApp *tview.Application
-	Config   *config.GoployConfig
-	Pages    *tview.Pages
-	LogView  *tview.TextView
-	DetailsView *tview.TextView
-	ProjectList *tview.List
-	Controller deployment.Controller
+	TviewApp           *tview.Application
+	Config             *config.GoployConfig
+	Pages              *tview.Pages
+	LogView            *tview.TextView
+	DetailsView        *tview.TextView
+	ProjectList        *tview.List
+	Controller         deployment.Controller
+	DomainConfigurator caddy.Configurator
 
 	// State for managing running tasks
 	logCancelCtx context.Context
@@ -30,19 +33,21 @@ type App struct {
 }
 
 func NewApp(cfg *config.GoployConfig) *App {
-	// For TUI, we can pass nil mailer or initialize it if we want TUI to also send emails.
-	// Given the requirements, TUI seems focused on interactive use, but if we want consistency,
-	// we should probably initialize it. However, TUI entrypoint (cmd/tui) doesn't load server config for mailer.
-	// For now, we'll pass nil to SSHClient, assuming TUI users see the output directly.
+	return NewAppWithDependencies(cfg, deployment.NewSSHClient(nil), caddy.NewAdminClient(nil))
+}
+
+// NewAppWithDependencies allows injecting collaborators for testing.
+func NewAppWithDependencies(cfg *config.GoployConfig, controller deployment.Controller, domainConfigurator caddy.Configurator) *App {
 	app := &App{
-		TviewApp: tview.NewApplication(),
-		Config:   cfg,
-		Pages:    tview.NewPages(),
-		Controller: deployment.NewSSHClient(nil),
+		TviewApp:           tview.NewApplication(),
+		Config:             cfg,
+		Pages:              tview.NewPages(),
+		Controller:         controller,
+		DomainConfigurator: domainConfigurator,
 	}
 
 	// Initialize the UI
-    app.setupUI()
+	app.setupUI()
 
 	return app
 }
@@ -66,12 +71,13 @@ func (a *App) setupUI() {
 
 	// Create the project list
 	a.ProjectList = NewProjectList(a.Config.Projects, &ProjectListHandlers{
-		OnDeploy:  func(p config.Project) { a.handleDeployment(p) },
-		OnLogs:    func(p config.Project) { a.handleLogs(p) },
-		OnRestart: func(p config.Project) { a.handleRestart(p) },
-		OnStop:    func(p config.Project) { a.handleStop(p) },
-		OnShell:   func(p config.Project) { a.handleShell(p) },
-		OnRefresh: func(p config.Project) { a.handleRefresh(p) },
+		OnDeploy:           func(p config.Project) { a.handleDeployment(p) },
+		OnLogs:             func(p config.Project) { a.handleLogs(p) },
+		OnRestart:          func(p config.Project) { a.handleRestart(p) },
+		OnStop:             func(p config.Project) { a.handleStop(p) },
+		OnShell:            func(p config.Project) { a.handleShell(p) },
+		OnRefresh:          func(p config.Project) { a.handleRefresh(p) },
+		OnConfigureDomains: func(p config.Project) { a.handleConfigureDomains(p) },
 	})
 
 	// Hook into list selection change
@@ -381,6 +387,102 @@ func (a *App) showServiceSelectionModal(project config.Project, services []strin
 
 	a.Pages.AddPage("services_modal", modal, true, true)
 	a.TviewApp.SetFocus(list)
+}
+
+func (a *App) handleConfigureDomains(project config.Project) {
+	a.cancelPreviousTask()
+	a.LogView.SetTitle("Domain Management (Caddy)")
+	a.LogView.Clear()
+
+	form := a.buildDomainForm(project)
+	modal := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(form, 8, 1, true).
+			AddItem(nil, 0, 1, false), 0, 2, true).
+		AddItem(nil, 0, 1, false)
+
+	a.Pages.AddPage("domains_modal", modal, true, true)
+	a.TviewApp.SetFocus(form)
+}
+
+func (a *App) buildDomainForm(project config.Project) *tview.Form {
+	existing := ""
+	if project.Caddy != nil && len(project.Caddy.Domains) > 0 {
+		existing = strings.Join(project.Caddy.Domains, ", ")
+	}
+
+	input := tview.NewInputField().
+		SetLabel("Domains").
+		SetText(existing).
+		SetFieldWidth(60)
+
+	form := tview.NewForm().
+		AddFormItem(input).
+		AddButton("Save", func() {
+			domains := parseDomainsInput(input.GetText())
+			if len(domains) == 0 {
+				a.TviewApp.QueueUpdateDraw(func() {
+					fmt.Fprintf(a.LogView, "[red]Please provide at least one domain.[white]\n")
+				})
+				return
+			}
+
+			a.Pages.RemovePage("domains_modal")
+			a.LogView.Clear()
+			fmt.Fprintf(a.LogView, "[yellow]Configuring domains for %s via Caddy...[white]\n", project.Name)
+
+			go func() {
+				if a.DomainConfigurator == nil {
+					a.TviewApp.QueueUpdateDraw(func() {
+						fmt.Fprintf(a.LogView, "[red]Domain configurator not available.[white]\n")
+					})
+					return
+				}
+
+				err := a.DomainConfigurator.ConfigureDomains(context.Background(), project, domains)
+				a.TviewApp.QueueUpdateDraw(func() {
+					if err != nil {
+						fmt.Fprintf(a.LogView, "[red]Failed to configure domains: %v[white]\n", err)
+						return
+					}
+
+					fmt.Fprintf(a.LogView, "[green]Domains configured successfully.[white]\n")
+
+					// Update cached project domains so subsequent edits reflect the new state
+					for i, p := range a.Config.Projects {
+						if p.Name == project.Name {
+							if a.Config.Projects[i].Caddy == nil {
+								a.Config.Projects[i].Caddy = &config.CaddyConfig{}
+							}
+							a.Config.Projects[i].Caddy.Domains = domains
+						}
+					}
+				})
+			}()
+		}).
+		AddButton("Cancel", func() {
+			a.Pages.RemovePage("domains_modal")
+		})
+
+	form.SetBorder(true).SetTitle("Configure Domains (Caddy)")
+	return form
+}
+
+func parseDomainsInput(input string) []string {
+	fields := strings.FieldsFunc(input, func(r rune) bool {
+		return r == ',' || r == '\n' || r == ';'
+	})
+
+	var domains []string
+	for _, f := range fields {
+		if trimmed := strings.TrimSpace(f); trimmed != "" {
+			domains = append(domains, trimmed)
+		}
+	}
+
+	return domains
 }
 
 // ThreadSafeWriter allows writing to a tview.TextView from a goroutine
