@@ -1,7 +1,14 @@
 // nolint:revive
 package util
 
-// ContainsAllString checks whether the given string slice contains all strings provided.
+// ContainsAllString checks if a string slice contains all the specified substring elements.
+//
+// Parameters:
+//   - slice: The slice to check.
+//   - sub: The list of strings to look for in the slice.
+//
+// Returns:
+//   - bool: True if all elements in 'sub' are present in 'slice'.
 func ContainsAllString(slice []string, sub ...string) bool {
 	contains := make(map[string]bool)
 	for _, v := range sub {
@@ -23,7 +30,14 @@ func ContainsAllString(slice []string, sub ...string) bool {
 	return true
 }
 
-// UniqueString takes the string slice provided and returns a new slice with all duplicates removed.
+// UniqueString returns a new slice containing only unique strings from the input slice.
+// Order is preserved based on the first occurrence of each string.
+//
+// Parameters:
+//   - slice: The input string slice.
+//
+// Returns:
+//   - []string: A new slice with duplicates removed.
 func UniqueString(slice []string) []string {
 	seen := make(map[string]struct{})
 	res := make([]string, 0)

@@ -12,16 +12,21 @@ import (
 )
 
 var (
+	// projectRootDir holds the cached project root directory path.
 	projectRootDir string
-	dirOnce        sync.Once
+	// dirOnce ensures the project root directory is determined only once.
+	dirOnce sync.Once
 )
 
-// GetProjectRootDir returns the path as string to the project_root for a **running application**.
-// Note: This function should not be used for generation targets (go generate, make go-generate).
-// Thus it's explicitly excluded from the build tag scripts, see instead:
-// * /scripts/get_project_root_dir.go
-// * ./get_project_root_dir_scripts.go (delegates to above)
-// https://stackoverflow.com/questions/43215655/building-multiple-binaries-using-different-packages-and-build-tags
+// GetProjectRootDir returns the absolute path to the project root directory for the running application.
+//
+// It first attempts to determine the directory of the executable.
+// If the "PROJECT_ROOT_DIR" environment variable is set, it takes precedence.
+//
+// This function is excluded from "scripts" build tags.
+//
+// Returns:
+//   - string: The path to the project root directory.
 func GetProjectRootDir() string {
 	dirOnce.Do(func() {
 		ex, err := os.Executable()

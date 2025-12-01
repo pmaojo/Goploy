@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// EchoServer configures the Echo web framework.
 type EchoServer struct {
 	Debug                          bool
 	ListenAddress                  string
@@ -26,6 +27,7 @@ type EchoServer struct {
 	WebTemplatesViewsBaseDirAbs    string
 }
 
+// PprofServer configures the pprof debugging server.
 type PprofServer struct {
 	Enable                      bool
 	EnableManagementKeyAuth     bool
@@ -47,11 +49,13 @@ type EchoServerSecureMiddleware struct {
 	ReferrerPolicy        string
 }
 
+// ManagementServer configures the internal management API.
 type ManagementServer struct {
 	Secret                  string `json:"-"` // sensitive
 	EnableMetrics           bool
 }
 
+// LoggerServer configures the application logging.
 type LoggerServer struct {
 	Level              zerolog.Level
 	RequestLevel       zerolog.Level
@@ -64,6 +68,8 @@ type LoggerServer struct {
 	PrettyPrintConsole bool
 }
 
+// Server holds the complete configuration for the application server, including
+// HTTP, logging, mailer, and Goploy-specific settings.
 type Server struct {
 	Echo       EchoServer
 	Pprof      PprofServer
@@ -74,6 +80,7 @@ type Server struct {
 	Goploy     GoployServer
 }
 
+// GoployServer holds configuration specific to Goploy functionality.
 type GoployServer struct {
 	APIKey string `json:"-"` // sensitive
 }

@@ -20,10 +20,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Flags holds the command-line flags for the server command.
 type Flags struct {
-	// Removed DB flags
+	// Removed DB flags as per stateless architecture.
 }
 
+// New creates and returns the `server` subcommand.
+// This command initializes and starts the RESTful JSON API server.
 func New() *cobra.Command {
 	var flags Flags
 

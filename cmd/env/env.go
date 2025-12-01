@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// New creates and returns the `env` subcommand.
+// This command prints the current environment configuration in JSON format.
 func New() *cobra.Command {
 	return &cobra.Command{
 		Use:   "env",

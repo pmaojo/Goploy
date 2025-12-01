@@ -8,13 +8,20 @@ import (
 )
 
 var (
+	// ErrWaitTimeout is returned when the WaitGroup fails to complete within the specified duration.
 	ErrWaitTimeout = errors.New("WaitGroup has timed out")
 )
 
-// WaitTimeout waits for the waitgroup for the specified max timeout.
-// Returns nil on completion or ErrWaitTimeout if waiting timed out.
-// See https://stackoverflow.com/questions/32840687/timeout-for-waitgroup-wait
-// Note that the spawned goroutine to wg.Wait() gets leaked and will continue running detached
+// WaitTimeout waits for the provided WaitGroup to complete or for the timeout to expire.
+//
+// Note: If the timeout occurs, the goroutine waiting on wg.Wait() will continue to run in the background (leaked) until it completes.
+//
+// Parameters:
+//   - wg: The WaitGroup to wait for.
+//   - timeout: The maximum duration to wait.
+//
+// Returns:
+//   - error: nil if the WaitGroup completed, or ErrWaitTimeout if the timeout was reached.
 func WaitTimeout(wg *sync.WaitGroup, timeout time.Duration) error {
 	waitChan := make(chan struct{})
 	go func() {

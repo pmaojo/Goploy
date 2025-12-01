@@ -9,23 +9,20 @@ import (
 	"github.com/subosito/gotenv"
 )
 
-// os.SetEnv func signature
+// envSetter defines the function signature for setting environment variables.
 type envSetter = func(key string, value string) error
 
-// DotEnvTryLoad forcefully overrides ENV variables through **a maybe available** .env file.
+// DotEnvTryLoad attempts to load and apply environment variables from a specified .env file.
 //
-// This function will always remain silent if a .env file does not exist!
-// If we successfully apply an ENV file, we will log a warning.
-// If there are any other errors, we will panic!
+// If the file does not exist, it silently returns.
+// If the file exists and is loaded successfully, it logs a warning indicating that ENV variables are being overridden.
+// If an error occurs during loading (other than file not found), it panics.
 //
-// This mechanism should only be used **locally** to easily inject (gitignored)
-// secrets into your ENV. Non-existing .env files are actually the **best case**.
+// This function is intended for local development to inject secrets.
 //
-// When running normally (not within tests):
-// DotEnvTryLoad("/path/tp/my.env.local", os.SetEnv)
-//
-// For tests (and autoreset) use t.Setenv:
-// DotEnvTryLoad("/path/to/my.env.test.local", func(k string, v string) error { t.Setenv(k, v); return nil })
+// Parameters:
+//   - absolutePathToEnvFile: The absolute path to the .env file.
+//   - setEnvFn: A function to set environment variables (e.g., os.Setenv).
 func DotEnvTryLoad(absolutePathToEnvFile string, setEnvFn envSetter) {
 	err := DotEnvLoad(absolutePathToEnvFile, setEnvFn)
 
@@ -38,16 +35,16 @@ func DotEnvTryLoad(absolutePathToEnvFile string, setEnvFn envSetter) {
 	}
 }
 
-// DotEnvLoad forcefully overrides ENV variables through the supplied .env file.
+// DotEnvLoad forces the loading of environment variables from a specified .env file, overriding existing ones.
 //
-// This mechanism should only be used **locally** to easily inject (gitignored)
-// secrets into your ENV.
+// This is useful for injecting configuration locally or in tests.
 //
-// When running normally (not within tests):
-// DotEnvLoad("/path/to/my.env.local", os.SetEnv)
+// Parameters:
+//   - absolutePathToEnvFile: The absolute path to the .env file.
+//   - setEnvFn: A function to set environment variables (e.g., os.Setenv or t.Setenv).
 //
-// For tests (and ENV var autoreset) use t.Setenv:
-// DotEnvLoad("/path/to/my.env.test.local", func(k string, v string) error { t.Setenv(k, v); return nil })
+// Returns:
+//   - error: An error if the file cannot be opened, parsed, or if setting a variable fails.
 func DotEnvLoad(absolutePathToEnvFile string, setEnvFn envSetter) error {
 	file, err := os.Open(absolutePathToEnvFile)
 	if err != nil {

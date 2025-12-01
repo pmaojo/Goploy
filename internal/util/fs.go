@@ -7,9 +7,16 @@ import (
 	"time"
 )
 
-// TouchFile creates an empty file if the file doesn’t already exist.
-// If the file already exists then TouchFile updates the modified time of the file.
-// Returns the modification time of the created / updated file.
+// TouchFile mimics the unix `touch` command.
+// It creates an empty file if the file doesn’t already exist.
+// If the file already exists, it updates the modified time of the file to the current time.
+//
+// Parameters:
+//   - absolutePathToFile: The absolute path to the file.
+//
+// Returns:
+//   - time.Time: The modification time of the created/updated file.
+//   - error: An error if the file creation or time update fails.
 func TouchFile(absolutePathToFile string) (time.Time, error) {
 	_, err := os.Stat(absolutePathToFile)
 

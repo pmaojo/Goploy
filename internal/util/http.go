@@ -23,6 +23,7 @@ import (
 )
 
 const (
+	// HTTPHeaderCacheControl is the standard HTTP header key for Cache-Control.
 	HTTPHeaderCacheControl = "Cache-Control"
 )
 
@@ -32,7 +33,12 @@ const (
 // Note: In contrast to BindAndValidate, this method does not restore the body after binding (it's considered consumed).
 // Thus use BindAndValidateBody only once per request!
 //
-// Returns an error that can directly be returned from an echo handler and sent to the client should binding or validating of any model fail.
+// Parameters:
+//   - c: The echo Context.
+//   - v: The validatable struct to bind data to.
+//
+// Returns:
+//   - error: An error that can directly be returned from an echo handler (e.g., HTTP 400 Bad Request) if binding or validation fails.
 func BindAndValidateBody(c echo.Context, v runtime.Validatable) error {
 	binder, ok := c.Echo().Binder.(*echo.DefaultBinder)
 	if !ok {
@@ -49,7 +55,12 @@ func BindAndValidateBody(c echo.Context, v runtime.Validatable) error {
 // BindAndValidatePathAndQueryParams binds the request, parsing **only** its path **and** query params and performs validation
 // as enforced by the Swagger schema associated with the provided type.
 //
-// Returns an error that can directly be returned from an echo handler and sent to the client should binding or validating of any model fail.
+// Parameters:
+//   - c: The echo Context.
+//   - v: The validatable struct to bind data to.
+//
+// Returns:
+//   - error: An error that can directly be returned from an echo handler if binding or validation fails.
 func BindAndValidatePathAndQueryParams(c echo.Context, v runtime.Validatable) error {
 	binder, ok := c.Echo().Binder.(*echo.DefaultBinder)
 	if !ok {
@@ -70,7 +81,12 @@ func BindAndValidatePathAndQueryParams(c echo.Context, v runtime.Validatable) er
 // BindAndValidatePathParams binds the request, parsing **only** its path params and performs validation
 // as enforced by the Swagger schema associated with the provided type.
 //
-// Returns an error that can directly be returned from an echo handler and sent to the client should binding or validating of any model fail.
+// Parameters:
+//   - c: The echo Context.
+//   - v: The validatable struct to bind data to.
+//
+// Returns:
+//   - error: An error that can directly be returned from an echo handler if binding or validation fails.
 func BindAndValidatePathParams(c echo.Context, v runtime.Validatable) error {
 	binder, ok := c.Echo().Binder.(*echo.DefaultBinder)
 	if !ok {
@@ -87,7 +103,12 @@ func BindAndValidatePathParams(c echo.Context, v runtime.Validatable) error {
 // BindAndValidateQueryParams binds the request, parsing **only** its query params and performs validation
 // as enforced by the Swagger schema associated with the provided type.
 //
-// Returns an error that can directly be returned from an echo handler and sent to the client should binding or validating of any model fail.
+// Parameters:
+//   - c: The echo Context.
+//   - v: The validatable struct to bind data to.
+//
+// Returns:
+//   - error: An error that can directly be returned from an echo handler if binding or validation fails.
 func BindAndValidateQueryParams(c echo.Context, v runtime.Validatable) error {
 	binder, ok := c.Echo().Binder.(*echo.DefaultBinder)
 	if !ok {
@@ -103,28 +124,15 @@ func BindAndValidateQueryParams(c echo.Context, v runtime.Validatable) error {
 
 // BindAndValidate binds the request, parsing path+query+body and validating these structs.
 //
-// Deprecated: Use our dedicated BindAndValidate* mappers instead:
+// Deprecated: Use our dedicated BindAndValidate* mappers instead.
 //
-//	BindAndValidateBody(c echo.Context, v runtime.Validatable) error // preferred
-//	BindAndValidatePathAndQueryParams(c echo.Context, v runtime.Validatable) error  // preferred
-//	BindAndValidatePathParams(c echo.Context, v runtime.Validatable) error // rare usecases
-//	BindAndValidateQueryParams(c echo.Context, v runtime.Validatable) error // rare usecases
+// Parameters:
+//   - c: The echo Context.
+//   - v: The primary validatable struct to bind data to.
+//   - validatables: Additional validatable structs to bind to (allows binding multiple structs from one request).
 //
-// BindAndValidate works like Echo <v4.2.0. It was preferred to .Bind() everything (query, params, body) to a single struct
-// in one pass. Thus we included additional handling to allow multiple body rebindings (though copying while restoring),
-// as goswagger generated structs per endpoint are typically **separated** into one params struct (path and query) and one
-// body struct. Echo >=v4.2.0 DefaultBinder now supports binding query, path params and body to their **own** structs natively.
-// Thus, you areencouraged to use our new dedicated BindAndValidate* mappers, which are relevant for the structs goswagger
-// autogenerates for you.
-//
-// Original: Parses body (depending on the `Content-Type` request header) and performs payload validation as enforced by
-// the Swagger schema associated with the provided type. In addition to binding the body, BindAndValidate also assigns query
-// and URL parameters (if any) to a struct and perform validations on those.
-//
-// Providing more than one struct allows for binding payload and parameters simultaneously since echo and goswagger expect data
-// to be structured differently. If you do not require parsing of both body and params, additional structs can be omitted.
-//
-// Returns an error that can directly be returned from an echo handler and sent to the client should binding or validating of any model fail.
+// Returns:
+//   - error: An error that can directly be returned from an echo handler if binding or validation fails.
 func BindAndValidate(c echo.Context, v runtime.Validatable, validatables ...runtime.Validatable) error {
 	// TODO error handling for all occurrences of Bind() due to JSON unmarshal type mismatches
 	if len(validatables) == 0 {
@@ -157,10 +165,15 @@ func BindAndValidate(c echo.Context, v runtime.Validatable, validatables ...runt
 	return nil
 }
 
-// ValidateAndReturn returns the provided data as a JSON response with the given HTTP status code after performing payload
-// validation as enforced by the Swagger schema associated with the provided type.
-// `v` must implement `github.com/go-openapi/runtime.Validatable` in order to perform validations, otherwise an internal server error is thrown.
-// Returns an error that can directly be returned from an echo handler and sent to the client should sending or validating fail.
+// ValidateAndReturn performs payload validation on `v` and, if successful, returns it as a JSON response.
+//
+// Parameters:
+//   - c: The echo Context.
+//   - code: The HTTP status code to return.
+//   - v: The data to validate and return.
+//
+// Returns:
+//   - error: An error if validation fails or if writing the response fails.
 func ValidateAndReturn(c echo.Context, code int, v runtime.Validatable) error {
 	if err := validatePayload(c, v); err != nil {
 		return err
@@ -173,6 +186,18 @@ func ValidateAndReturn(c echo.Context, code int, v runtime.Validatable) error {
 	return nil
 }
 
+// ParseFileUpload parses and validates a file upload from a multipart form.
+//
+// Parameters:
+//   - c: The echo Context.
+//   - formNameFile: The name of the form field containing the file.
+//   - allowedMIMETypes: A list of allowed MIME types.
+//
+// Returns:
+//   - *multipart.FileHeader: The file header information.
+//   - multipart.File: The open file handle.
+//   - *mimetype.MIME: The detected MIME type.
+//   - error: An error if parsing, validation, or file access fails.
 func ParseFileUpload(c echo.Context, formNameFile string, allowedMIMETypes []string) (*multipart.FileHeader, multipart.File, *mimetype.MIME, error) {
 	log := LogFromEchoContext(c)
 
@@ -241,6 +266,17 @@ func ParseFileUpload(c echo.Context, formNameFile string, allowedMIMETypes []str
 	return fileHeader, file, mime, nil
 }
 
+// StreamFile streams the contents of a reader to the response as a file attachment.
+//
+// Parameters:
+//   - c: The echo Context.
+//   - code: The HTTP status code.
+//   - mediaType: The MIME type of the file.
+//   - fileName: The name of the file to be downloaded.
+//   - r: The ReadCloser containing the file data.
+//
+// Returns:
+//   - error: An error if streaming fails.
 func StreamFile(c echo.Context, code int, mediaType string, fileName string, r io.ReadCloser) error {
 	formattedMediaType := mime.FormatMediaType("attachment",
 		map[string]string{
@@ -260,6 +296,12 @@ func StreamFile(c echo.Context, code int, mediaType string, fileName string, r i
 	return nil
 }
 
+// SetOrAppendHeader sets a header value or appends to it if it already exists, comma-separated.
+//
+// Parameters:
+//   - header: The http.Header object.
+//   - key: The header key.
+//   - values: The values to add.
 func SetOrAppendHeader(header http.Header, key string, values ...string) {
 	headerSet := header.Get(key)
 	headerValue := strings.Join(values, ", ")

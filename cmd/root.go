@@ -6,12 +6,13 @@ import (
 
 	"github.com/pmaojo/goploy/cmd/env"
 	"github.com/pmaojo/goploy/cmd/server"
+	"github.com/pmaojo/goploy/cmd/tui"
 	"github.com/pmaojo/goploy/internal/config"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
+// rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
 	Version: config.GetFormattedBuildArgs(),
 	Use:     "app",
@@ -31,6 +32,7 @@ func Execute() {
 	rootCmd.AddCommand(
 		env.New(),
 		server.New(),
+		tui.New(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

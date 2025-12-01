@@ -6,12 +6,17 @@ import (
 	"reflect"
 )
 
-// GetFieldsImplementing returns all fields of a struct implementing a certain interface.
-// Returned fields are pointers to a type or interface objects.
+// GetFieldsImplementing retrieves all exported fields of a struct that implement a specified interface.
 //
-// Parameter structPtr must be a pointer to a struct.
-// Parameter interfaceObject must be given as a pointer to an interface,
-// for example (*Insertable)(nil), where Insertable is an interface name.
+// The returned slice contains values of type T, which are the fields implementing the interface.
+//
+// Parameters:
+//   - structPtr: A pointer to the struct to inspect.
+//   - interfaceObject: A nil pointer to the interface type T (e.g., (*MyInterface)(nil)).
+//
+// Returns:
+//   - []T: A slice of interface values found in the struct.
+//   - error: An error if the inputs are not valid pointers to a struct and an interface.
 func GetFieldsImplementing[T any](structPtr interface{}, interfaceObject *T) ([]T, error) {
 	// Verify if structPtr is a pointer to a struct
 	inputParamStructType := reflect.TypeOf(structPtr)
@@ -82,7 +87,12 @@ func GetFieldsImplementing[T any](structPtr interface{}, interfaceObject *T) ([]
 
 // IsStructInitialized checks if all the struct fields are initialized (not zero).
 // Members of the struct such as empty strings or numbers set to zero are interpreted as a zero value!
-// Parameter structPtr needs to be a pointer to a struct.
+//
+// Parameters:
+//   - structPtr: A pointer to the struct to check.
+//
+// Returns:
+//   - error: An error containing a joined list of uninitialized field names, or nil if all are initialized.
 func IsStructInitialized(structPtr interface{}) error {
 	inputType := reflect.TypeOf(structPtr)
 	if inputType == nil ||
