@@ -3,14 +3,18 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/pmaojo/goploy/internal/config"
 	"github.com/pmaojo/goploy/internal/util"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDotEnvOverride(t *testing.T) {
+	setProjectRootEnv(t)
+
 	// Ensure clean state
 	t.Setenv("IS_THIS_A_TEST_ENV", "")
 	assert.Empty(t, os.Getenv("IS_THIS_A_TEST_ENV"))
@@ -23,7 +27,7 @@ func TestDotEnvOverride(t *testing.T) {
 	orgPsqlUser := "original_user"
 
 	config.DotEnvTryLoad(
-		filepath.Join(util.GetProjectRootDir(), "/internal/config/testdata/.env1.local"),
+		filepath.Join(util.GetProjectRootDir(), "internal/config/testdata/.env1.local"),
 		func(k string, v string) error { t.Setenv(k, v); return nil })
 
 	assert.Equal(t, "yes", os.Getenv("IS_THIS_A_TEST_ENV"))
@@ -36,7 +40,7 @@ func TestDotEnvOverride(t *testing.T) {
 
 	// override works as expected?
 	config.DotEnvTryLoad(
-		filepath.Join(util.GetProjectRootDir(), "/internal/config/testdata/.env2.local"),
+		filepath.Join(util.GetProjectRootDir(), "internal/config/testdata/.env2.local"),
 		func(k string, v string) error { t.Setenv(k, v); return nil })
 
 	assert.Equal(t, "yes still", os.Getenv("IS_THIS_A_TEST_ENV"))
@@ -47,18 +51,22 @@ func TestDotEnvOverride(t *testing.T) {
 }
 
 func TestNoopEnvNotFound(t *testing.T) {
+	setProjectRootEnv(t)
+
 	assert.NotPanics(t, assert.PanicTestFunc(func() {
 		config.DotEnvTryLoad(
-			filepath.Join(util.GetProjectRootDir(), "/internal/config/testdata/.env.does.not.exist"),
+			filepath.Join(util.GetProjectRootDir(), "internal/config/testdata/.env.does.not.exist"),
 			func(k string, v string) error { t.Setenv(k, v); return nil },
 		)
 	}), "does not panic on file inexistance")
 }
 
 func TestEmptyEnv(t *testing.T) {
+	setProjectRootEnv(t)
+
 	assert.NotPanics(t, assert.PanicTestFunc(func() {
 		config.DotEnvTryLoad(
-			filepath.Join(util.GetProjectRootDir(), "/internal/config/testdata/.env.local.sample"),
+			filepath.Join(util.GetProjectRootDir(), "internal/config/testdata/.env.local.sample"),
 			func(k string, v string) error { t.Setenv(k, v); return nil },
 		)
 	}), "does not panic on file inexistance")
@@ -67,10 +75,22 @@ func TestEmptyEnv(t *testing.T) {
 }
 
 func TestPanicsOnEnvMalform(t *testing.T) {
+	setProjectRootEnv(t)
+
 	assert.Panics(t, assert.PanicTestFunc(func() {
 		config.DotEnvTryLoad(
-			filepath.Join(util.GetProjectRootDir(), "/internal/config/testdata/.env.local.malformed"),
+			filepath.Join(util.GetProjectRootDir(), "internal/config/testdata/.env.local.malformed"),
 			func(k string, v string) error { t.Setenv(k, v); return nil },
 		)
 	}), "does panic on file malform")
+}
+
+func setProjectRootEnv(t *testing.T) {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+
+	root, err := util.FindProjectRoot(filepath.Dir(file))
+	require.NoError(t, err)
+	t.Setenv("PROJECT_ROOT_DIR", root)
 }

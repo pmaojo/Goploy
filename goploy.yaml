@@ -6,6 +6,12 @@ projects:
     identity_file: "~/.ssh/id_rsa"
     path: "/var/www/marketing"
     repo: "git@github.com:company/marketing.git"
+    caddy:
+      admin_url: "http://localhost:2019"
+      server: "goploy"
+      upstream: "localhost:3000"
+      domains:
+        - marketing.example.com
   - name: "Backend API"
     host: "api.production.com"
     user: "admin"

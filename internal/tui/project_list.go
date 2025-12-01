@@ -2,18 +2,19 @@ package tui
 
 import (
 	"fmt"
-	"github.com/rivo/tview"
+	"github.com/gdamore/tcell/v2"
 	"github.com/pmaojo/goploy/internal/config"
-    "github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type ProjectListHandlers struct {
-	OnDeploy  func(config.Project)
-	OnLogs    func(config.Project)
-	OnRestart func(config.Project)
-	OnStop    func(config.Project)
-	OnShell   func(config.Project)
-	OnRefresh func(config.Project)
+	OnDeploy           func(config.Project)
+	OnLogs             func(config.Project)
+	OnRestart          func(config.Project)
+	OnStop             func(config.Project)
+	OnShell            func(config.Project)
+	OnRefresh          func(config.Project)
+	OnConfigureDomains func(config.Project)
 }
 
 // NewProjectList creates a tview.List populated with the given projects.
@@ -21,20 +22,20 @@ func NewProjectList(projects []config.Project, handlers *ProjectListHandlers) *t
 	list := tview.NewList().
 		ShowSecondaryText(true)
 
-    list.SetBorder(true).SetTitle("Projects (FR2)")
+	list.SetBorder(true).SetTitle("Projects (FR2)")
 
 	for _, p := range projects {
 		// Capture variable for closure
 		p := p
 		list.AddItem(p.Name, fmt.Sprintf("%s (%s)", p.Host, p.Path), 0, func() {
-            if handlers != nil && handlers.OnDeploy != nil {
-                handlers.OnDeploy(p)
-            }
+			if handlers != nil && handlers.OnDeploy != nil {
+				handlers.OnDeploy(p)
+			}
 		})
 	}
 
-    // Set some basic keyboard navigation help
-    list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	// Set some basic keyboard navigation help
+	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if handlers == nil {
 			return event
 		}
@@ -49,6 +50,11 @@ func NewProjectList(projects []config.Project, handlers *ProjectListHandlers) *t
 		case 'd', 'D': // Deploy
 			if handlers.OnDeploy != nil {
 				handlers.OnDeploy(p)
+			}
+			return nil
+		case 'c', 'C': // Configure Domains
+			if handlers.OnConfigureDomains != nil {
+				handlers.OnConfigureDomains(p)
 			}
 			return nil
 		case 'l', 'L': // Logs
@@ -107,8 +113,8 @@ func NewProjectList(projects []config.Project, handlers *ProjectListHandlers) *t
 			}
 			return nil
 		}
-        return event
-    })
+		return event
+	})
 
 	return list
 }
