@@ -10,7 +10,7 @@ FROM golang:1.25.0-bookworm AS development
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Our Makefile / env fully supports parallel job execution
-ENV MAKEFLAGS "-j 8 --no-print-directory"
+ENV MAKEFLAGS="-j 8 --no-print-directory"
 
 # postgresql-support: Add the official postgres repo to install the matching postgresql-client tools of your stack
 # https://wiki.postgresql.org/wiki/Apt
@@ -81,7 +81,7 @@ RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     dpkg-reconfigure --frontend=noninteractive locales && \
     update-locale LANG=en_US.UTF-8
 
-ENV LANG en_US.UTF-8
+ENV LANG=en_US.UTF-8
 
 # sql pgFormatter: Integrates with vscode-pgFormatter (we pin pgFormatter.pgFormatterPath for the extension to this version)
 # requires perl to be installed
@@ -206,8 +206,8 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/home/$USERNA
 # E.g. "which golangci-lint" should report "/go/bin" not "/app/bin" (where VSCode will place it).
 # https://github.com/go-modules-by-example/index/blob/master/010_tools/README.md#walk-through
 WORKDIR /app
-ENV GOBIN /app/bin
-ENV PATH $PATH:$GOBIN
+ENV GOBIN=/app/bin
+ENV PATH=$PATH:$GOBIN
 
 ### -----------------------
 # --- Stage: builder
@@ -256,7 +256,6 @@ FROM gcr.io/distroless/base-debian12:debug AS app
 COPY --from=builder /app/bin/app /app/
 COPY --from=builder /app/api/swagger.yml /app/api/
 COPY --from=builder /app/assets /app/assets/
-COPY --from=builder /app/migrations /app/migrations/
 COPY --from=builder /app/web /app/web/
 
 WORKDIR /app
