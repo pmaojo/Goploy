@@ -1,4 +1,4 @@
-package caddy
+package proxy
 
 import (
 	"bytes"
@@ -19,18 +19,18 @@ type Configurator interface {
 	ConfigureDomains(ctx context.Context, project config.Project, domains []string) error
 }
 
-// AdminClient talks to the Caddy admin API.
-type AdminClient struct {
+// CaddyClient talks to the Caddy admin API.
+type CaddyClient struct {
 	httpClient *http.Client
 }
 
-// NewAdminClient builds a Configurator backed by the Caddy admin API.
-func NewAdminClient(httpClient *http.Client) *AdminClient {
+// NewCaddyClient builds a Configurator backed by the Caddy admin API.
+func NewCaddyClient(httpClient *http.Client) *CaddyClient {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
 
-	return &AdminClient{httpClient: httpClient}
+	return &CaddyClient{httpClient: httpClient}
 }
 
 var errNotFound = errors.New("resource not found")
@@ -38,7 +38,7 @@ var errNotFound = errors.New("resource not found")
 const defaultServerName = "goploy"
 
 // ConfigureDomains ensures the given domains route to the project's upstream via Caddy.
-func (c *AdminClient) ConfigureDomains(ctx context.Context, project config.Project, domains []string) error {
+func (c *CaddyClient) ConfigureDomains(ctx context.Context, project config.Project, domains []string) error {
 	if project.Caddy == nil {
 		return errors.New("caddy configuration missing on project")
 	}
@@ -124,7 +124,7 @@ func buildRoutePayload(routeID string, domains []string, upstream string) caddyR
 	}
 }
 
-func (c *AdminClient) putJSON(ctx context.Context, url string, payload any) error {
+func (c *CaddyClient) putJSON(ctx context.Context, url string, payload any) error {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(payload); err != nil {
 		return err

@@ -22,6 +22,7 @@ type Project struct {
 	Repo         string       `yaml:"repo"`
 	NotifyEmails []string     `yaml:"notify_emails"`
 	Caddy        *CaddyConfig `yaml:"caddy"`
+	Nginx        *NginxConfig `yaml:"nginx"`
 }
 
 type CaddyConfig struct {
@@ -30,6 +31,14 @@ type CaddyConfig struct {
 	Upstream string   `yaml:"upstream"`
 	Email    string   `yaml:"email"`
 	Domains  []string `yaml:"domains"`
+}
+
+type NginxConfig struct {
+	ConfigPath       string   `yaml:"config_path"`        // e.g. /etc/nginx/sites-available
+	SitesEnabledPath string   `yaml:"sites_enabled_path"` // e.g. /etc/nginx/sites-enabled
+	ReloadCmd        string   `yaml:"reload_cmd"`         // e.g. "sudo systemctl reload nginx"
+	Upstream         string   `yaml:"upstream"`
+	Domains          []string `yaml:"domains"`
 }
 
 // ParseGoployConfig parses the provided YAML data into a GoployConfig struct.

@@ -1,4 +1,4 @@
-package caddy
+package proxy
 
 import (
 	"context"
@@ -26,7 +26,7 @@ type routePayload struct {
 	Terminal bool `json:"terminal"`
 }
 
-func TestAdminClient_ConfiguresDomains(t *testing.T) {
+func TestCaddyClient_ConfiguresDomains(t *testing.T) {
 	var requestCount int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +50,7 @@ func TestAdminClient_ConfiguresDomains(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewAdminClient(nil)
+	client := NewCaddyClient(nil)
 	project := config.Project{
 		Name: "Project Alpha",
 		Caddy: &config.CaddyConfig{
@@ -65,7 +65,7 @@ func TestAdminClient_ConfiguresDomains(t *testing.T) {
 	require.Equal(t, int32(1), atomic.LoadInt32(&requestCount))
 }
 
-func TestAdminClient_CreatesServerWhenMissing(t *testing.T) {
+func TestCaddyClient_CreatesServerWhenMissing(t *testing.T) {
 	var requestCount int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		current := atomic.AddInt32(&requestCount, 1)
@@ -94,7 +94,7 @@ func TestAdminClient_CreatesServerWhenMissing(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewAdminClient(nil)
+	client := NewCaddyClient(nil)
 	project := config.Project{
 		Name: "Project Beta",
 		Caddy: &config.CaddyConfig{
