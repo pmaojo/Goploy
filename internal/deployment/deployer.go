@@ -14,6 +14,7 @@ import (
 	"github.com/pmaojo/goploy/internal/config"
 	"github.com/pmaojo/goploy/internal/mailer"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/term"
 )
@@ -27,6 +28,8 @@ type Controller interface {
 	ListServices(project config.Project) ([]string, error)
 	RunShell(project config.Project, service string) error
 	GetStatus(ctx context.Context, project config.Project) (ProjectStatus, error)
+	UploadFile(project config.Project, content []byte, remotePath string) error
+	RunCommand(project config.Project, cmd string) error
 }
 
 // SSHClient implements Controller using golang.org/x/crypto/ssh.
@@ -103,7 +106,13 @@ func (c *SSHClient) connect(project config.Project) (*ssh.Client, error) {
 		}
 	}
 
-	// TODO: Add Agent support if needed (requires golang.org/x/crypto/ssh/agent)
+	// Add Agent support
+	if socket := os.Getenv("SSH_AUTH_SOCK"); socket != "" {
+		if conn, err := net.Dial("unix", socket); err == nil {
+			agentClient := agent.NewClient(conn)
+			authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
+		}
+	}
 
 	// 3. Host Key Verification
 	// We use ~/.ssh/known_hosts
@@ -422,6 +431,40 @@ func (c *SSHClient) GetStatus(ctx context.Context, project config.Project) (Proj
 		Status:         status,
 		Containers:     containers,
 	}, nil
+}
+
+// UploadFile uploads content to a remote file.
+func (c *SSHClient) UploadFile(project config.Project, content []byte, remotePath string) error {
+	client, err := c.connect(project)
+	if err != nil {
+		return fmt.Errorf("connection failed: %w", err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create session: %w", err)
+	}
+	defer session.Close()
+
+	session.Stdin = strings.NewReader(string(content))
+	cmd := fmt.Sprintf("cat > %q", remotePath)
+
+	if err := session.Run(cmd); err != nil {
+		return fmt.Errorf("failed to upload file to %s: %w", remotePath, err)
+	}
+	return nil
+}
+
+// RunCommand runs a command on the remote host without TUI output streaming (just returns error).
+func (c *SSHClient) RunCommand(project config.Project, cmd string) error {
+	client, err := c.connect(project)
+	if err != nil {
+		return fmt.Errorf("connection failed: %w", err)
+	}
+	defer client.Close()
+
+	return c.runSession(client, cmd, io.Discard, os.Stderr, nil)
 }
 
 func (c *SSHClient) runSession(client *ssh.Client, cmd string, stdout, stderr io.Writer, ctx context.Context) error {

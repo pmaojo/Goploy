@@ -10,9 +10,9 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/pmaojo/goploy/internal/caddy"
 	"github.com/pmaojo/goploy/internal/config"
 	"github.com/pmaojo/goploy/internal/deployment"
+	"github.com/pmaojo/goploy/internal/proxy"
 )
 
 type App struct {
@@ -23,7 +23,7 @@ type App struct {
 	DetailsView        *tview.TextView
 	ProjectList        *tview.List
 	Controller         deployment.Controller
-	DomainConfigurator caddy.Configurator
+	DomainConfigurator proxy.Configurator
 
 	// State for managing running tasks
 	logCancelCtx context.Context
@@ -33,11 +33,11 @@ type App struct {
 }
 
 func NewApp(cfg *config.GoployConfig) *App {
-	return NewAppWithDependencies(cfg, deployment.NewSSHClient(nil), caddy.NewAdminClient(nil))
+	return NewAppWithDependencies(cfg, deployment.NewSSHClient(nil), proxy.NewCaddyClient(nil))
 }
 
 // NewAppWithDependencies allows injecting collaborators for testing.
-func NewAppWithDependencies(cfg *config.GoployConfig, controller deployment.Controller, domainConfigurator caddy.Configurator) *App {
+func NewAppWithDependencies(cfg *config.GoployConfig, controller deployment.Controller, domainConfigurator proxy.Configurator) *App {
 	app := &App{
 		TviewApp:           tview.NewApplication(),
 		Config:             cfg,
@@ -409,8 +409,34 @@ func (a *App) handleConfigureDomains(project config.Project) {
 
 func (a *App) buildDomainForm(project config.Project) *tview.Form {
 	existing := ""
-	if project.Caddy != nil && len(project.Caddy.Domains) > 0 {
-		existing = strings.Join(project.Caddy.Domains, ", ")
+	var configurator proxy.Configurator
+	title := "Configure Domains"
+
+	// Determine configurator based on project config
+	if project.Caddy != nil {
+		if len(project.Caddy.Domains) > 0 {
+			existing = strings.Join(project.Caddy.Domains, ", ")
+		}
+		// Assuming a.DomainConfigurator is generic or we cast it?
+		// Currently a.DomainConfigurator is initialized as CaddyClient in NewApp.
+		// We need to support Nginx too.
+		// For now, we will use the injected one if it matches, or create a new one?
+		// The dependency injection in NewApp is static. We might need to make it dynamic or support both.
+		// But let's assume for this specific method, we can determine which one to use.
+		configurator = a.DomainConfigurator // Default to Caddy if injected
+		title += " (Caddy)"
+	} else if project.Nginx != nil {
+		if len(project.Nginx.Domains) > 0 {
+			existing = strings.Join(project.Nginx.Domains, ", ")
+		}
+		// Create Nginx client on the fly or use a factory?
+		// Since we have Controller, we can create it.
+		configurator = proxy.NewNginxClient(a.Controller)
+		title += " (Nginx)"
+	} else {
+		// No proxy config
+		// Maybe default to Caddy if unsure, or show error?
+		// Or show a message "No proxy configured in yaml".
 	}
 
 	input := tview.NewInputField().
@@ -418,8 +444,15 @@ func (a *App) buildDomainForm(project config.Project) *tview.Form {
 		SetText(existing).
 		SetFieldWidth(60)
 
-	form := tview.NewForm().
-		AddFormItem(input).
+	form := tview.NewForm()
+
+	if configurator == nil {
+		form.AddTextView("Error", "No Caddy or Nginx configuration found in goploy.yaml for this project.", 40, 2, true, false)
+		form.AddButton("Close", func() {
+			a.Pages.RemovePage("domains_modal")
+		})
+	} else {
+		form.AddFormItem(input).
 		AddButton("Save", func() {
 			domains := parseDomainsInput(input.GetText())
 			if len(domains) == 0 {
@@ -431,17 +464,10 @@ func (a *App) buildDomainForm(project config.Project) *tview.Form {
 
 			a.Pages.RemovePage("domains_modal")
 			a.LogView.Clear()
-			fmt.Fprintf(a.LogView, "[yellow]Configuring domains for %s via Caddy...[white]\n", project.Name)
+			fmt.Fprintf(a.LogView, "[yellow]Configuring domains for %s...[white]\n", project.Name)
 
 			go func() {
-				if a.DomainConfigurator == nil {
-					a.TviewApp.QueueUpdateDraw(func() {
-						fmt.Fprintf(a.LogView, "[red]Domain configurator not available.[white]\n")
-					})
-					return
-				}
-
-				err := a.DomainConfigurator.ConfigureDomains(context.Background(), project, domains)
+				err := configurator.ConfigureDomains(context.Background(), project, domains)
 				a.TviewApp.QueueUpdateDraw(func() {
 					if err != nil {
 						fmt.Fprintf(a.LogView, "[red]Failed to configure domains: %v[white]\n", err)
@@ -453,10 +479,11 @@ func (a *App) buildDomainForm(project config.Project) *tview.Form {
 					// Update cached project domains so subsequent edits reflect the new state
 					for i, p := range a.Config.Projects {
 						if p.Name == project.Name {
-							if a.Config.Projects[i].Caddy == nil {
-								a.Config.Projects[i].Caddy = &config.CaddyConfig{}
+							if project.Caddy != nil {
+								a.Config.Projects[i].Caddy.Domains = domains
+							} else if project.Nginx != nil {
+								a.Config.Projects[i].Nginx.Domains = domains
 							}
-							a.Config.Projects[i].Caddy.Domains = domains
 						}
 					}
 				})
@@ -465,8 +492,9 @@ func (a *App) buildDomainForm(project config.Project) *tview.Form {
 		AddButton("Cancel", func() {
 			a.Pages.RemovePage("domains_modal")
 		})
+	}
 
-	form.SetBorder(true).SetTitle("Configure Domains (Caddy)")
+	form.SetBorder(true).SetTitle(title)
 	return form
 }
 
